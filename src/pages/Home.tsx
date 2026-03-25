@@ -5,16 +5,84 @@ import { ReelItem } from '../components/Cards';
 import { useApp } from '../store';
 import { motion } from 'motion/react';
 import { ArrowRight, Sparkles, ShoppingBag, Users } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { clsx } from 'clsx';
+import { getSafeImageUrl } from '../utils/imageUtils';
 
 export const Home: React.FC = () => {
-  const { products, posts, config } = useApp();
+  const navigate = useNavigate();
+  const { products, posts, config, trendItems } = useApp();
   const featuredProducts = products.slice(0, 3);
-  const reels = posts.filter(p => p.type === 'reel').slice(0, 3);
+  const reels = trendItems.slice(0, 3);
+  
+  const latestNotices = posts
+    .filter(post => ['Notice', 'News', 'Event'].includes(post.category))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .slice(0, 3);
 
   return (
     <div className="bg-white">
       <Hero />
+
+      {/* Notice Section */}
+      {latestNotices.length > 0 && (
+        <section className="py-12 bg-gray-50 border-y border-gray-100">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center space-x-3">
+                <Sparkles className="text-accent" size={24} />
+                <h2 className="text-2xl font-black tracking-tighter uppercase">Notice & News</h2>
+              </div>
+              <Link to="/notice" className="text-sm font-bold hover:text-accent transition-colors flex items-center space-x-1">
+                <span>전체보기</span>
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {latestNotices.map((post) => (
+                <Link 
+                  to="/notice" 
+                  state={{ selectedPostId: post.id }}
+                  key={post.id} 
+                  className="bg-white rounded-3xl border border-gray-100 hover:border-accent/30 transition-all group overflow-hidden flex flex-col"
+                >
+                  {post.imageUrl && (
+                    <div className="aspect-square overflow-hidden bg-gray-100">
+                      <img 
+                        src={getSafeImageUrl(post.imageUrl)} 
+                        alt={post.title} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => (e.currentTarget.src = 'https://picsum.photos/seed/error/400/225')}
+                      />
+                    </div>
+                  )}
+                  <div className="p-6">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <span className={clsx(
+                        "px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-tighter",
+                        post.category === 'Notice' ? "bg-black text-white" : 
+                        post.category === 'Event' ? "bg-accent text-black" : "bg-blue-500 text-white"
+                      )}>
+                        {post.category === 'Notice' ? '공지' : post.category === 'Event' ? '이벤트' : '뉴스'}
+                      </span>
+                      <span className="text-[10px] font-bold text-gray-400">
+                        {new Date(post.date).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-lg group-hover:text-accent transition-colors line-clamp-1 mb-2">
+                      {post.title}
+                    </h3>
+                    <p className="text-sm text-gray-400 line-clamp-2 font-medium">
+                      {post.content}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Featured Products Section */}
       <section className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -30,20 +98,24 @@ export const Home: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {featuredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard 
+              key={product.id} 
+              product={product} 
+              onClick={() => navigate(`/shop/${product.id}`, { state: { fromPremium: true } })}
+            />
           ))}
         </div>
       </section>
 
-      {/* Community / Reels Section */}
+      {/* Community / Trend Section */}
       <section className="py-24 bg-black text-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-end mb-12">
             <div>
-              <h2 className="text-4xl font-black tracking-tighter uppercase">최신 트렌드 릴스</h2>
+              <h2 className="text-4xl font-black tracking-tighter uppercase">최신 트렌드</h2>
             </div>
-            <Link to="/reels" className="group flex items-center space-x-2 text-sm font-bold hover:text-accent transition-colors">
-              <span>더 많은 릴스 보기</span>
+            <Link to="/trend" className="group flex items-center space-x-2 text-sm font-bold hover:text-accent transition-colors">
+              <span>더 많은 트렌드 보기</span>
               <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
             </Link>
           </div>
@@ -52,32 +124,6 @@ export const Home: React.FC = () => {
             {reels.map((reel) => (
               <ReelItem key={reel.id} post={reel} />
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Newsletter / CTA */}
-      <section className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-accent rounded-[3rem] p-12 md:p-24 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-          <div className="relative z-10 text-center max-w-2xl mx-auto">
-            <Sparkles size={48} className="mx-auto mb-8 text-black" />
-            <h2 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-8 uppercase">
-              디자인의 미래를 <br /> 함께 그리다
-            </h2>
-            <p className="text-lg font-medium mb-10 text-black/70">
-              {config.name}의 뉴스레터를 구독하고 최신 디자인 트렌드와 독점 혜택을 가장 먼저 확인하세요.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
-              <input 
-                type="email" 
-                placeholder="이메일 주소를 입력하세요" 
-                className="flex-1 px-6 py-4 rounded-full bg-white border-none focus:ring-2 focus:ring-black outline-none font-medium"
-              />
-              <button className="bg-black text-white px-8 py-4 rounded-full font-bold hover:bg-gray-800 transition-all">
-                구독하기
-              </button>
-            </div>
           </div>
         </div>
       </section>

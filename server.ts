@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { defaultConfig, defaultProducts, defaultPosts, defaultTrendItems, defaultReviews } from "./src/constants";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,26 +12,49 @@ const DATA_FILE = path.join(process.cwd(), "site-data.json");
 
 // Load initial data from file or use defaults
 function loadData() {
+  const defaults = {
+    config: defaultConfig,
+    products: defaultProducts,
+    posts: defaultPosts,
+    orders: [],
+    communityCategories: [],
+    rankings: [],
+    trendItems: defaultTrendItems,
+    reviews: defaultReviews,
+  };
+
   try {
     if (fs.existsSync(DATA_FILE)) {
       const data = fs.readFileSync(DATA_FILE, "utf-8");
-      return JSON.parse(data);
+      if (data.trim()) {
+        const parsed = JSON.parse(data);
+        // Merge with defaults to ensure all keys exist
+        return { ...defaults, ...parsed };
+      }
     }
   } catch (error) {
     console.error("Error loading data file:", error);
   }
-  return {
-    config: null,
-    products: null,
-    posts: null,
-    orders: [],
-  };
+  
+  // If no file or error, save defaults to file immediately
+  const initialData = defaults;
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(initialData, null, 2));
+  } catch (e) {
+    console.error("Error creating initial data file:", e);
+  }
+  return initialData;
 }
 
 let siteData = loadData();
 
 function saveData() {
   try {
+    // Safety check: Don't save if siteData is empty but was expected to have data
+    if (!siteData || (!siteData.config && !siteData.products && !siteData.posts)) {
+      console.warn("Attempted to save empty siteData, skipping to prevent data loss");
+      return;
+    }
     fs.writeFileSync(DATA_FILE, JSON.stringify(siteData, null, 2));
   } catch (error) {
     console.error("Error saving data file:", error);
@@ -73,6 +97,34 @@ async function startServer() {
   app.post("/api/orders", (req, res) => {
     console.log("POST /api/orders - Updating orders");
     siteData.orders = req.body;
+    saveData();
+    res.json({ success: true });
+  });
+
+  app.post("/api/community-categories", (req, res) => {
+    console.log("POST /api/community-categories - Updating community categories");
+    siteData.communityCategories = req.body;
+    saveData();
+    res.json({ success: true });
+  });
+
+  app.post("/api/rankings", (req, res) => {
+    console.log("POST /api/rankings - Updating rankings");
+    siteData.rankings = req.body;
+    saveData();
+    res.json({ success: true });
+  });
+
+  app.post("/api/trend-items", (req, res) => {
+    console.log("POST /api/trend-items - Updating trend items");
+    siteData.trendItems = req.body;
+    saveData();
+    res.json({ success: true });
+  });
+
+  app.post("/api/reviews", (req, res) => {
+    console.log("POST /api/reviews - Updating reviews");
+    siteData.reviews = req.body;
     saveData();
     res.json({ success: true });
   });

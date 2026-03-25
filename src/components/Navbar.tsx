@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ShoppingCart, User, Menu, X, LayoutDashboard, Share2, LogOut } from 'lucide-react';
+import { ShoppingCart, User, Menu, X, LayoutDashboard, Share2, LogOut, ShoppingBag, Heart } from 'lucide-react';
 import { useApp } from '../store';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -11,15 +11,17 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export const Navbar: React.FC = () => {
-  const { config, user, logout } = useApp();
+  const { config, user, logout, cart, products, wishlist } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const location = useLocation();
 
   const navLinks = [
+    { name: 'HOME', path: '/' },
     { name: 'SHOP', path: '/shop' },
     { name: '커뮤니티', path: '/community' },
-    { name: '릴스', path: '/reels' },
+    { name: '트렌드', path: '/trend' },
+    { name: '공지사항', path: '/notice' },
   ];
 
   return (
@@ -65,19 +67,39 @@ export const Navbar: React.FC = () => {
                   {link.name}
                 </Link>
               ))}
+              <Link
+                to="/sell"
+                className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-black hover:opacity-80 transition-all"
+                title="판매 신청"
+              >
+                <ShoppingBag size={18} />
+              </Link>
             </div>
 
-            {/* Icons & Sell */}
+            {/* Icons & My Page */}
             <div className="hidden md:flex items-center space-x-6">
-              <Link 
-                to="/sell" 
-                className="text-sm font-bold border border-gray-200 px-4 py-2 rounded-full hover:bg-black hover:text-white transition-all"
-              >
-                판매
+              <Link to="/wishlist" className="p-2 hover:bg-gray-50 rounded-full transition-colors relative">
+                <Heart size={24} className="text-black" />
+                {wishlist.length > 0 && (
+                  <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                    {wishlist.length}
+                  </span>
+                )}
               </Link>
-              <button className="p-2 hover:bg-gray-50 rounded-full transition-colors">
+              <Link to="/cart" className="p-2 hover:bg-gray-50 rounded-full transition-colors relative">
                 <ShoppingCart size={24} className="text-black" />
-              </button>
+                {cart.filter(item => products.some(p => p.id === item.productId)).length > 0 && (
+                  <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                    {cart.filter(item => products.some(p => p.id === item.productId)).length}
+                  </span>
+                )}
+              </Link>
+              <Link 
+                to="/mypage" 
+                className="p-2 hover:bg-gray-50 rounded-full transition-colors"
+              >
+                <User size={24} className="text-black" />
+              </Link>
             </div>
 
             {/* Mobile Menu Button */}
@@ -109,17 +131,33 @@ export const Navbar: React.FC = () => {
               <Link
                 to="/sell"
                 onClick={() => setIsOpen(false)}
-                className="block px-3 py-3 rounded-md text-lg font-bold text-accent"
+                className="flex items-center space-x-3 px-3 py-3 rounded-md text-lg font-bold text-black"
               >
-                판매
+                <span className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center">
+                  <ShoppingBag size={24} />
+                </span>
+                <span>판매 신청</span>
               </Link>
             </div>
             
             <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
               <div className="flex space-x-4">
-                <button className="p-3 bg-gray-50 rounded-full">
+                <Link to="/wishlist" onClick={() => setIsOpen(false)} className="p-3 bg-gray-50 rounded-full relative">
+                  <Heart size={24} />
+                  {wishlist.length > 0 && (
+                    <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                      {wishlist.length}
+                    </span>
+                  )}
+                </Link>
+                <Link to="/cart" onClick={() => setIsOpen(false)} className="p-3 bg-gray-50 rounded-full relative">
                   <ShoppingCart size={24} />
-                </button>
+                  {cart.filter(item => products.some(p => p.id === item.productId)).length > 0 && (
+                    <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                      {cart.filter(item => products.some(p => p.id === item.productId)).length}
+                    </span>
+                  )}
+                </Link>
                 {user ? (
                   <div className="flex items-center space-x-3">
                     <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full border-2 border-accent" />

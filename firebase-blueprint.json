@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "SiteConfig": {
+      "title": "Site Configuration",
+      "description": "Global configuration for the website",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "backgroundColor": { "type": "string" },
+        "fontFamily": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "footerDescription": { "type": "string" },
+        "banners": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "subtitle": { "type": "string" },
+              "imageUrl": { "type": "string" },
+              "link": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "Product": {
+      "title": "Product",
+      "description": "A product for sale",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "category": { "type": "string" },
+        "detailInfo": { "type": "string" },
+        "premiumLabel": { "type": "string" },
+        "discountRate": { "type": "number" },
+        "detailImages": { "type": "array", "items": { "type": "string" } },
+        "premiumFeatures": { "type": "array", "items": { "type": "string" } },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" }
+      }
+    },
+    "Post": {
+      "title": "Community Post",
+      "description": "A post in the community",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "author": { "type": "string" },
+        "date": { "type": "string" },
+        "category": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "likes": { "type": "number" },
+        "isPinned": { "type": "boolean" },
+        "order": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "/site/config": {
+      "schema": "SiteConfig",
+      "description": "The global site configuration"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Collection of products"
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Collection of community posts"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders"
+    },
+    "/communityCategories/{categoryId}": {
+      "schema": "CommunityCategory",
+      "description": "Categories for community posts"
+    },
+    "/rankings/{rankingId}": {
+      "schema": "Ranking",
+      "description": "User rankings"
+    },
+    "/trendItems/{itemId}": {
+      "schema": "TrendItem",
+      "description": "Trending items"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Product reviews"
+    }
+  }
+}

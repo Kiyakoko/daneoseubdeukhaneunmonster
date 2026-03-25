@@ -1,0 +1,133 @@
+{
+  "config": {
+    "name": "OTAMONO",
+    "banners": [
+      {
+        "id": "3",
+        "title": "뭉치 아니고 뚱치",
+        "subtitle": "코난~! 난 뭉치가 아니고 뚱치라고~!",
+        "imageUrl": "https://pin.it/TxFaZ1QA7",
+        "link": "/community"
+      },
+      {
+        "id": "1",
+        "title": "앙상블 스타즈\n",
+        "subtitle": "앙직히 앙스타 앙나 사랑함",
+        "imageUrl": "https://pin.it/67iZuArOn",
+        "link": "/shop"
+      },
+      {
+        "id": "2",
+        "title": "꿈빛 파티시엘",
+        "subtitle": "딸기의 스위트 왕자님들♥",
+        "imageUrl": "https://pin.it/2EYsw1zHU",
+        "link": "/shop"
+      },
+      {
+        "id": "k1tfu48n9",
+        "title": "리바이 아커만의 귀환",
+        "subtitle": "“죽지 마라. 죽어서 이겼다고 해도 의미 없어. 살아남아야 합니다. 그래야 이긴 겁니다.”",
+        "imageUrl": "https://pin.it/1YSbnoWYo",
+        "link": "/community"
+      }
+    ],
+    "primaryColor": "#FFFFFF",
+    "accentColor": "#d4d5d3",
+    "backgroundColor": "#FFFFFF",
+    "fontFamily": "\"Inter\", ui-sans-serif, system-ui, sans-serif",
+    "logoUrl": "https://picsum.photos/seed/animation-logo/200/50"
+  },
+  "products": [],
+  "posts": [
+    {
+      "id": "99poe8vuu",
+      "title": "[속보] 어린이 탐정단 '뭉치',,,연재 30년만에 '뚱치'로 이름 바뀌어",
+      "content": "뚱치: \"가은누나가 저에게 새 이름을 부여해줬어요!\"",
+      "author": "마에다 가은",
+      "category": "Notice",
+      "date": "2026-03-23T12:02:06.386Z",
+      "isPinned": false
+    }
+  ],
+  "orders": [],
+  "communityCategories": [
+    {
+      "id": "1",
+      "name": "귀멸의 칼날",
+      "description": "혈귀와 맞서 싸우는 귀살대의 이야기",
+      "members": 12500,
+      "posts": 3400,
+      "imageUrl": "https://picsum.photos/seed/kny/400/600"
+    },
+    {
+      "id": "2",
+      "name": "주술회전",
+      "description": "저주를 퇴치하는 주술사들의 사투",
+      "members": 10200,
+      "posts": 2800,
+      "imageUrl": "https://picsum.photos/seed/jjk/400/600"
+    },
+    {
+      "id": "3",
+      "name": "체인소 맨",
+      "description": "악마와 계약한 소년의 파격적인 액션",
+      "members": 8900,
+      "posts": 1500,
+      "imageUrl": "https://picsum.photos/seed/csm/400/600"
+    },
+    {
+      "id": "4",
+      "name": "스파이 패밀리",
+      "description": "스파이, 암살자, 초능력자의 위장 가족",
+      "members": 15600,
+      "posts": 4200,
+      "imageUrl": "https://picsum.photos/seed/spy/400/600"
+    }
+  ],
+  "rankings": [
+    {
+      "id": "1",
+      "name": "DesignMaster",
+      "posts": 150,
+      "likes": 4500
+    },
+    {
+      "id": "2",
+      "name": "CreativeMind",
+      "posts": 120,
+      "likes": 3800
+    },
+    {
+      "id": "3",
+      "name": "AnimeLover",
+      "posts": 95,
+      "likes": 2100
+    }
+  ],
+  "trendItems": [
+    {
+      "id": "1",
+      "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-girl-in-neon-light-dancing-40142-large.mp4",
+      "title": "Neon Dance",
+      "thumbnail": "https://picsum.photos/seed/trend1/400/600",
+      "author": "CreativeMind",
+      "likes": 1240
+    },
+    {
+      "id": "2",
+      "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-man-dancing-under-neon-lights-40143-large.mp4",
+      "title": "City Lights",
+      "thumbnail": "https://picsum.photos/seed/trend2/400/600",
+      "author": "UrbanExplorer",
+      "likes": 850
+    },
+    {
+      "id": "3",
+      "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-young-woman-dancing-in-a-nightclub-40144-large.mp4",
+      "title": "Night Life",
+      "thumbnail": "https://picsum.photos/seed/trend3/400/600",
+      "author": "NightOwl",
+      "likes": 2100
+    }
+  ]
+}

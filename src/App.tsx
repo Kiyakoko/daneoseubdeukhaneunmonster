@@ -10,8 +10,16 @@ import { Navbar } from './components/Navbar';
 import { Home } from './pages/Home';
 import { Shop } from './pages/Shop';
 import { Community } from './pages/Community';
+import { Trend } from './pages/Trend';
+import { Notice } from './pages/Notice';
 import { Admin } from './pages/Admin';
+import { Sell } from './pages/Sell';
+import { MyPage } from './pages/MyPage';
+import { Cart } from './pages/Cart';
+import { Wishlist } from './pages/Wishlist';
+import { ProductDetail } from './pages/ProductDetail';
 import { motion, AnimatePresence } from 'motion/react';
+import { Instagram, Facebook, Twitter } from 'lucide-react';
 
 const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { config } = useApp();
@@ -23,7 +31,10 @@ const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     root.style.setProperty('--accent-color', config.accentColor);
     root.style.setProperty('--bg-color', config.backgroundColor);
     root.style.setProperty('--font-family', config.fontFamily);
-  }, [config.accentColor, config.backgroundColor, config.fontFamily]);
+    
+    // Update document title
+    document.title = config.name || 'OTAMONO';
+  }, [config.accentColor, config.backgroundColor, config.fontFamily, config.name]);
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-accent selection:text-black">
@@ -51,13 +62,20 @@ const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   <span className="text-2xl font-black tracking-tighter uppercase">{config.name}</span>
                 </div>
                 <p className="text-gray-400 max-w-sm mb-8 leading-relaxed">
-                  현대적인 디자인과 커뮤니티가 만나는 곳. <br />
-                  {config.name}은 당신의 창의성을 현실로 바꿉니다.
+                  {config.footerDescription || `현대적인 디자인과 커뮤니티가 만나는 곳. ${config.name}은 당신의 창의성을 현실로 바꿉니다.`}
                 </p>
                 <div className="flex space-x-4">
-                  <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center hover:bg-accent hover:text-black transition-all cursor-pointer">IG</div>
-                  <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center hover:bg-accent hover:text-black transition-all cursor-pointer">FB</div>
-                  <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center hover:bg-accent hover:text-black transition-all cursor-pointer">TW</div>
+                  <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center hover:bg-accent hover:text-black transition-all cursor-pointer">
+                    <Instagram size={18} />
+                  </div>
+                  <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center hover:bg-accent hover:text-black transition-all cursor-pointer">
+                    <Facebook size={18} />
+                  </div>
+                  <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center hover:bg-accent hover:text-black transition-all cursor-pointer">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                    </svg>
+                  </div>
                 </div>
               </div>
               <div>
@@ -66,7 +84,8 @@ const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   <li className="hover:text-white transition-colors cursor-pointer">홈</li>
                   <li className="hover:text-white transition-colors cursor-pointer">쇼핑몰</li>
                   <li className="hover:text-white transition-colors cursor-pointer">커뮤니티</li>
-                  <li className="hover:text-white transition-colors cursor-pointer">릴스</li>
+                  <li className="hover:text-white transition-colors cursor-pointer">트렌드</li>
+                  <li className="hover:text-white transition-colors cursor-pointer">공지사항</li>
                 </ul>
               </div>
               <div>
@@ -103,9 +122,15 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/shop" element={<Shop />} />
+            <Route path="/shop/:id" element={<ProductDetail />} />
             <Route path="/community" element={<Community />} />
-            <Route path="/reels" element={<Community />} />
+            <Route path="/trend" element={<Trend />} />
+            <Route path="/notice" element={<Notice />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/sell" element={<Sell />} />
+            <Route path="/mypage" element={<MyPage />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/wishlist" element={<Wishlist />} />
           </Routes>
         </PageWrapper>
       </Router>
