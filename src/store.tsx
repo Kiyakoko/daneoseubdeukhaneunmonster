@@ -457,6 +457,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { id, ...data } = o;
       await setDoc(doc(db, 'orders', id), data);
+      
+      const updatedOrders = [...orders.filter(item => item.id !== id), { ...data, id }];
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedOrders)
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `orders/${o.id}`);
     }
@@ -466,6 +473,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { id, ...data } = o;
       await setDoc(doc(db, 'orders', id), data);
+      
+      const updatedOrders = orders.map(item => item.id === id ? { ...data, id } : item);
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedOrders)
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `orders/${o.id}`);
     }
@@ -474,6 +488,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteOrder = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'orders', id));
+      
+      const updatedOrders = orders.filter(item => item.id !== id);
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedOrders)
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `orders/${id}`);
     }
@@ -481,8 +502,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setOrders = async (newOrders: Order[]) => {
     for (const o of newOrders) {
-      await addOrder(o);
+      const { id, ...data } = o;
+      await setDoc(doc(db, 'orders', id), data);
     }
+    await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newOrders)
+    });
   };
 
   const setCommunityCategories = async (categories: CommunityCategory[]) => {
@@ -490,7 +517,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await setDoc(doc(db, 'communityCategories', c.id), c);
     }
     // Sync to server
-    await fetch('/api/communityCategories', {
+    await fetch('/api/community-categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(categories)
@@ -514,7 +541,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await setDoc(doc(db, 'trendItems', t.id), t);
     }
     // Sync to server
-    await fetch('/api/trendItems', {
+    await fetch('/api/trend-items', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(items)
@@ -539,7 +566,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await setDoc(doc(db, 'trendItems', id), data);
       
       const updatedItems = trendItems.map(i => i.id === id ? item : i);
-      await fetch('/api/trendItems', {
+      await fetch('/api/trend-items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedItems)
