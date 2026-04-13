@@ -42,10 +42,13 @@ export const getSafeImageUrl = (url: string | undefined): string => {
   // Check if we are in a static hosting environment (like Netlify)
   // where the Express server proxy won't be available.
   const isStaticHost = window.location.hostname.includes('netlify.app') || 
-                      window.location.hostname.includes('github.io');
+                      window.location.hostname.includes('github.io') ||
+                      window.location.hostname.includes('vercel.app');
   
   if (isStaticHost) {
-    return url;
+    // Use a public image proxy as a fallback for static hosts
+    // wsrv.nl is a reliable, free image proxy that handles CORS and Referrer issues
+    return `https://wsrv.nl/?url=${encodeURIComponent(url)}&default=${encodeURIComponent(url)}`;
   }
 
   // For other external images (especially Pinterest which needs extraction), 

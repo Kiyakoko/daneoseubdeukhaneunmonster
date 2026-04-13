@@ -188,25 +188,30 @@ async function startServer() {
 
         const headers: Record<string, string> = {
           "User-Agent": userAgents[mode],
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
+          "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+          "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
           "Cache-Control": "no-cache",
           "Pragma": "no-cache",
-          "Upgrade-Insecure-Requests": "1",
-          "Sec-Fetch-Dest": "document",
-          "Sec-Fetch-Mode": "navigate",
-          "Sec-Fetch-Site": "none",
-          "Sec-Fetch-User": "?1"
+          "Sec-Fetch-Dest": "image",
+          "Sec-Fetch-Mode": "no-cors",
+          "Sec-Fetch-Site": "cross-site"
         };
 
         // Add Referer for Pinterest links
         if (url.includes("pinterest.com") || url.includes("pin.it")) {
           headers["Referer"] = "https://www.pinterest.com/";
+          headers["Sec-Fetch-Dest"] = "document";
+          headers["Sec-Fetch-Mode"] = "navigate";
         }
 
         // Add Referer for NamuWiki links
         if (url.includes("namu.wiki")) {
           headers["Referer"] = "https://namu.wiki/";
+          headers["Origin"] = "https://namu.wiki";
+          headers["Sec-Fetch-Site"] = "same-site";
+          headers["Sec-Fetch-Mode"] = "no-cors";
+          headers["Sec-Fetch-Dest"] = "image";
+          headers["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
         }
 
         return await fetch(url, {
@@ -223,6 +228,35 @@ async function startServer() {
         console.log(`Initial fetch for ${imageUrl} failed with ${response.status}, retrying with alternative UA...`);
         await new Promise(r => setTimeout(r, 500)); // Wait 0.5s
         response = await fetchWithHeaders(imageUrl, 'alternative');
+      }
+
+      // If still failing with 403 (common for NamuWiki/Pinterest), try via public proxy fallback
+      if (response.status === 403 || !response.ok) {
+        console.log(`Proxy fetch for ${imageUrl} still failing (${response.status}), trying via public proxy fallback (wsrv.nl)...`);
+        try {
+          const publicProxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(imageUrl)}&default=${encodeURIComponent(imageUrl)}`;
+          const fallbackResponse = await fetch(publicProxyUrl, {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+            signal: controller.signal
+          });
+          
+          if (fallbackResponse.ok) {
+            response = fallbackResponse;
+          } else {
+            // Try another public proxy if wsrv.nl fails
+            console.log(`wsrv.nl failed, trying images.weserv.nl...`);
+            const secondaryProxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(imageUrl)}`;
+            const secondaryResponse = await fetch(secondaryProxyUrl, {
+              headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+              signal: controller.signal
+            });
+            if (secondaryResponse.ok) {
+              response = secondaryResponse;
+            }
+          }
+        } catch (fallbackErr) {
+          console.error("Public proxy fallback failed:", fallbackErr);
+        }
       }
 
       clearTimeout(timeoutId);
