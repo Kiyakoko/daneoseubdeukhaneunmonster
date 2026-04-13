@@ -204,6 +204,11 @@ async function startServer() {
           headers["Referer"] = "https://www.pinterest.com/";
         }
 
+        // Add Referer for NamuWiki links
+        if (url.includes("namu.wiki")) {
+          headers["Referer"] = "https://namu.wiki/";
+        }
+
         return await fetch(url, {
           headers,
           signal: controller.signal,
