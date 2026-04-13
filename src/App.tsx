@@ -10,9 +10,9 @@ import { Navbar } from './components/Navbar';
 import { Home } from './pages/Home';
 import { Shop } from './pages/Shop';
 import { Community } from './pages/Community';
-import { Trend } from './pages/Trend';
 import { Notice } from './pages/Notice';
 import { Admin } from './pages/Admin';
+import { ScrollToTop } from './components/ScrollToTop';
 import { Sell } from './pages/Sell';
 import { MyPage } from './pages/MyPage';
 import { Cart } from './pages/Cart';
@@ -22,7 +22,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Instagram, Facebook, Twitter } from 'lucide-react';
 
 const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { config } = useApp();
+  const { config, isLoaded } = useApp();
   const location = useLocation();
   const isAdmin = location.pathname.startsWith('/admin');
 
@@ -36,13 +36,21 @@ const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     document.title = config.name || 'OTAMONO';
   }, [config.accentColor, config.backgroundColor, config.fontFamily, config.name]);
 
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-gray-200 border-t-black rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-accent selection:text-black">
       {!isAdmin && <Navbar />}
       <main className="flex-grow">
         <AnimatePresence mode="wait">
           <motion.div
-            key={location.pathname}
+            key={location.pathname + (location.state?.activeTab || '')}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
@@ -83,9 +91,8 @@ const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 <ul className="space-y-4 text-sm font-medium text-gray-400">
                   <li className="hover:text-white transition-colors cursor-pointer">홈</li>
                   <li className="hover:text-white transition-colors cursor-pointer">쇼핑몰</li>
-                  <li className="hover:text-white transition-colors cursor-pointer">커뮤니티</li>
-                  <li className="hover:text-white transition-colors cursor-pointer">트렌드</li>
-                  <li className="hover:text-white transition-colors cursor-pointer">공지사항</li>
+                  <li className="hover:text-white transition-colors cursor-pointer">COMMUNITY</li>
+                  <li className="hover:text-white transition-colors cursor-pointer">NOTICE</li>
                 </ul>
               </div>
               <div>
@@ -118,13 +125,13 @@ export default function App() {
   return (
     <AppProvider>
       <Router>
+        <ScrollToTop />
         <PageWrapper>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/shop" element={<Shop />} />
             <Route path="/shop/:id" element={<ProductDetail />} />
             <Route path="/community" element={<Community />} />
-            <Route path="/trend" element={<Trend />} />
             <Route path="/notice" element={<Notice />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/sell" element={<Sell />} />

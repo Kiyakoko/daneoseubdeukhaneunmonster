@@ -31,7 +31,7 @@ export const Notice: React.FC = () => {
     });
 
   const tabs = [
-    { id: 'Notice', name: '공지사항' },
+    { id: 'Notice', name: 'NOTICE' },
     { id: 'News', name: '뉴스' },
     { id: 'Event', name: '이벤트' },
   ];
@@ -44,7 +44,7 @@ export const Notice: React.FC = () => {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-16"
         >
-          <h1 className="text-5xl font-black tracking-tighter mb-4 uppercase">Notice</h1>
+          <h1 className="text-5xl font-black tracking-tighter mb-4 uppercase">NOTICE</h1>
           <p className="text-gray-400 font-medium">새로운 소식과 이벤트를 확인하세요</p>
         </motion.div>
 
@@ -110,7 +110,7 @@ export const Notice: React.FC = () => {
                           post.category === 'Notice' ? "bg-black text-white" : 
                           post.category === 'Event' ? "bg-accent text-black" : "bg-blue-500 text-white"
                         )}>
-                          {post.category === 'Notice' ? '공지' : post.category === 'Event' ? '이벤트' : '뉴스'}
+                          {post.category === 'Notice' ? 'NOTICE' : post.category === 'Event' ? '이벤트' : '뉴스'}
                         </span>
                         {post.isPinned && (
                           <span className="px-2 py-0.5 rounded-md bg-accent text-white text-[10px] font-black uppercase tracking-tighter flex items-center gap-1">
@@ -161,7 +161,7 @@ export const Notice: React.FC = () => {
                   selectedPost.category === 'Notice' ? "bg-black text-white" : 
                   selectedPost.category === 'Event' ? "bg-accent text-black" : "bg-blue-500 text-white"
                 )}>
-                  {selectedPost.category === 'Notice' ? '공지사항' : selectedPost.category === 'News' ? '뉴스' : '이벤트'}
+                  {selectedPost.category === 'Notice' ? 'NOTICE' : selectedPost.category === 'News' ? '뉴스' : '이벤트'}
                 </span>
                 <span className="text-sm text-gray-400 font-bold">
                   {new Date(selectedPost.date).toLocaleDateString()}

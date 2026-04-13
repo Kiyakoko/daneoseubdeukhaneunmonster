@@ -105,6 +105,10 @@ export const Cart: React.FC = () => {
                     alt={item.product!.name}
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = 'https://picsum.photos/seed/error/200/200';
+                    }}
                   />
                 </Link>
                 <div className="flex-grow">

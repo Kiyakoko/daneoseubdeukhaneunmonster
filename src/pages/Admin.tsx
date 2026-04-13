@@ -26,9 +26,11 @@ export const Admin: React.FC = () => {
     posts, addPost, updatePost, deletePost, setPosts,
     orders, updateOrder,
     communityCategories, setCommunityCategories,
-    rankings, setRankings,
-    trendItems, setTrendItems, updateTrendItem,
+    rankings, setRankings, syncRankings,
+    trendItems, setTrendItems, addTrendItem, deleteTrendItem, updateTrendItem,
     reviews, setReviews,
+    users, updateUser, deleteUser,
+    saleApplications, updateSaleApplicationStatus, deleteSaleApplication,
     user
   } = useApp();
 
@@ -71,8 +73,8 @@ export const Admin: React.FC = () => {
     localStorage.removeItem('admin_auth');
   };
 
-  const [activeTab, setActiveTab] = useState<'settings' | 'banners' | 'products' | 'posts' | 'orders' | 'community' | 'trend' | 'reviews'>('settings');
-  const [communitySubTab, setCommunitySubTab] = useState<'categories' | 'rankings' | 'hot' | 'cosplay'>('categories');
+  const [activeTab, setActiveTab] = useState<'settings' | 'banners' | 'products' | 'posts' | 'orders' | 'community' | 'trend' | 'reviews' | 'users' | 'saleApplications'>('settings');
+  const [communitySubTab, setCommunitySubTab] = useState<'categories' | 'rankings' | 'hot' | 'cosplay' | 'tabs'>('categories');
 
   // Local states for saving
   const [localCategories, setLocalCategories] = useState(communityCategories);
@@ -128,7 +130,7 @@ export const Admin: React.FC = () => {
       // Force a small delay to ensure server has written the file
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      alert('모든 변경사항이 성공적으로 저장되었습니다. 이제 웹사이트와 링크에 즉시 반영됩니다.');
+      alert('모든 변경사항이 성공적으로 저장되었습니다.\n\n1. 웹사이트와 공유 링크에 즉시 반영되었습니다.\n2. 서버의 site-data.json 파일이 업데이트되었습니다.\n3. GitHub로 커밋/푸시하면 이 변경사항이 포함됩니다.');
       setShowSuccess(true);
     } catch (error) {
       console.error('Error saving all:', error);
@@ -170,6 +172,7 @@ export const Admin: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [editingBanner, setEditingBanner] = useState<any>(null);
   const [editingPost, setEditingPost] = useState<any>(null);
+  const [postCategoryFilter, setPostCategoryFilter] = useState<string>('전체');
   const [editingCommunityCategory, setEditingCommunityCategory] = useState<any>(null);
   const [editingRanking, setEditingRanking] = useState<any>(null);
   const [editingTrendItem, setEditingTrendItem] = useState<any>(null);
@@ -225,6 +228,8 @@ export const Admin: React.FC = () => {
     { id: 'community', name: '커뮤니티 관리', icon: MessageSquare },
     { id: 'trend', name: '트렌드 관리', icon: TrendingUp },
     { id: 'reviews', name: '후기 관리', icon: Heart },
+    { id: 'users', name: '회원 관리', icon: Users },
+    { id: 'saleApplications', name: '판매 신청 관리', icon: Package },
     { id: 'orders', name: '주문 현황', icon: LayoutDashboard },
   ];
 
@@ -261,10 +266,10 @@ export const Admin: React.FC = () => {
     );
   }
 
-  // Check if Firebase authenticated with the correct email
-  const isAdminEmail = user?.email === 'moonnight0613@gmail.com';
+  // Check if Firebase authenticated (any user can be admin if they know the password)
+  const isFirebaseAuthenticated = !!user;
 
-  if (!isAdminEmail) {
+  if (!isFirebaseAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <motion.div 
@@ -272,14 +277,13 @@ export const Admin: React.FC = () => {
           animate={{ opacity: 1, scale: 1 }}
           className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-md w-full text-center space-y-8"
         >
-          <div className="w-20 h-20 bg-red-500 rounded-3xl flex items-center justify-center mx-auto mb-8">
-            <Globe className="text-white" size={40} />
+          <div className="w-20 h-20 bg-accent rounded-3xl flex items-center justify-center mx-auto mb-8">
+            <Globe className="text-black" size={40} />
           </div>
           <h1 className="text-3xl font-black tracking-tighter uppercase">데이터 쓰기 권한 필요</h1>
           <p className="text-gray-500 text-sm font-bold">
             Firestore에 데이터를 저장하려면 <br/>
-            <span className="text-red-500">moonnight0613@gmail.com</span> 계정으로 <br/>
-            구글 로그인이 필요합니다.
+            먼저 구글 로그인이 필요합니다.
           </p>
           
           <button
@@ -412,7 +416,7 @@ export const Admin: React.FC = () => {
                       <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">사이트 이름</label>
                       <input 
                         type="text" 
-                        value={tempConfig.name} 
+                        value={tempConfig.name || ''} 
                         onChange={(e) => setTempConfig({ ...tempConfig, name: e.target.value })}
                         className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-bold"
                       />
@@ -421,7 +425,7 @@ export const Admin: React.FC = () => {
                       <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">하단 태그라인 (Footer Tagline)</label>
                       <textarea 
                         rows={3}
-                        value={tempConfig.footerDescription} 
+                        value={tempConfig.footerDescription || ''} 
                         onChange={(e) => setTempConfig({ ...tempConfig, footerDescription: e.target.value })}
                         className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-medium text-gray-600"
                         placeholder="현대적인 디자인과 커뮤니티가 만나는 곳. OTAMONO은 당신의 창의성을 현실로 바꿉니다."
@@ -442,13 +446,13 @@ export const Admin: React.FC = () => {
                         <div className="flex items-center space-x-4">
                           <input 
                             type="color" 
-                            value={tempConfig.accentColor} 
+                            value={tempConfig.accentColor || ''} 
                             onChange={(e) => setTempConfig({ ...tempConfig, accentColor: e.target.value })}
                             className="w-16 h-16 rounded-2xl overflow-hidden border-none cursor-pointer"
                           />
                           <input 
                             type="text" 
-                            value={tempConfig.accentColor} 
+                            value={tempConfig.accentColor || ''} 
                             onChange={(e) => setTempConfig({ ...tempConfig, accentColor: e.target.value })}
                             className="flex-1 px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-mono"
                           />
@@ -459,13 +463,13 @@ export const Admin: React.FC = () => {
                         <div className="flex items-center space-x-4">
                           <input 
                             type="color" 
-                            value={tempConfig.backgroundColor} 
+                            value={tempConfig.backgroundColor || ''} 
                             onChange={(e) => setTempConfig({ ...tempConfig, backgroundColor: e.target.value })}
                             className="w-16 h-16 rounded-2xl overflow-hidden border-none cursor-pointer"
                           />
                           <input 
                             type="text" 
-                            value={tempConfig.backgroundColor} 
+                            value={tempConfig.backgroundColor || ''} 
                             onChange={(e) => setTempConfig({ ...tempConfig, backgroundColor: e.target.value })}
                             className="flex-1 px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-[#BFFF00] outline-none font-mono"
                           />
@@ -476,7 +480,7 @@ export const Admin: React.FC = () => {
                     <div>
                       <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">폰트 스타일 (Typography)</label>
                       <select 
-                        value={tempConfig.fontFamily} 
+                        value={tempConfig.fontFamily || ''} 
                         onChange={(e) => setTempConfig({ ...tempConfig, fontFamily: e.target.value })}
                         className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-bold"
                       >
@@ -758,6 +762,24 @@ export const Admin: React.FC = () => {
                   </button>
                 </div>
 
+                <div className="flex flex-wrap gap-2 mb-8">
+                  {['전체', 'NOTICE', '이벤트', '뉴스', 'HOT', '코스프레', '카테고리'].map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setPostCategoryFilter(filter)}
+                      className={cn(
+                        "px-6 py-2.5 rounded-full text-xs font-bold transition-all border-2",
+                        postCategoryFilter === filter 
+                          ? "border-black bg-black text-white" 
+                          : "border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200 hover:text-black"
+                      )}
+                      style={postCategoryFilter === filter ? { backgroundColor: tempConfig.accentColor, borderColor: tempConfig.accentColor, color: 'black' } : {}}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -769,7 +791,20 @@ export const Admin: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {posts.map((post) => (
+                      {posts
+                        .filter(post => {
+                          if (postCategoryFilter === '전체') return true;
+                          if (postCategoryFilter === 'NOTICE') return post.category === 'Notice';
+                          if (postCategoryFilter === '이벤트') return post.category === 'Event';
+                          if (postCategoryFilter === '뉴스') return post.category === 'News';
+                          if (postCategoryFilter === 'HOT') return post.category === 'HOT';
+                          if (postCategoryFilter === '코스프레') return post.category === '코스프레';
+                          if (postCategoryFilter === '카테고리') {
+                            return communityCategories.some(cat => cat.name === post.category);
+                          }
+                          return false;
+                        })
+                        .map((post) => (
                         <tr key={post.id} className="group">
                           <td className="py-6">
                             <div className="flex items-center gap-2">
@@ -779,10 +814,13 @@ export const Admin: React.FC = () => {
                           </td>
                           <td className="py-6">
                             <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-bold text-gray-500">
-                              {post.category === 'Notice' ? '공지사항' : post.category === 'News' ? '뉴스' : post.category === 'Event' ? '이벤트' : post.category}
+                              {post.category === 'Notice' ? 'NOTICE' : post.category === 'News' ? '뉴스' : post.category === 'Event' ? '이벤트' : post.category}
                             </span>
                           </td>
-                          <td className="py-6 text-gray-400 text-sm">{new Date(post.date).toLocaleDateString()}</td>
+                          <td className="py-6 text-gray-400 text-sm">
+                            {post.date ? new Date(post.date).toLocaleDateString() : 
+                             post.createdAt ? new Date(post.createdAt).toLocaleDateString() : '날짜 없음'}
+                          </td>
                           <td className="py-6 text-right">
                             <div className="flex justify-end space-x-2">
                               <button 
@@ -853,7 +891,7 @@ export const Admin: React.FC = () => {
             >
               <div className="flex items-center justify-between">
                 <div className="flex space-x-4">
-                  {(['categories', 'rankings', 'hot', 'cosplay'] as const).map((tab) => (
+                  {(['categories', 'rankings', 'hot', 'cosplay', 'tabs'] as const).map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setCommunitySubTab(tab)}
@@ -863,7 +901,7 @@ export const Admin: React.FC = () => {
                           : 'bg-white text-gray-400 hover:text-black shadow-sm'
                       }`}
                     >
-                      {tab === 'categories' ? '카테고리' : tab === 'rankings' ? '랭킹' : tab === 'hot' ? 'HOT' : '코스프레'}
+                      {tab === 'categories' ? '카테고리' : tab === 'rankings' ? '랭킹' : tab === 'hot' ? 'HOT' : tab === 'cosplay' ? '코스프레' : '탭 순서'}
                     </button>
                   ))}
                 </div>
@@ -930,7 +968,7 @@ export const Admin: React.FC = () => {
                               <MessageSquare size={20} />
                             </div>
                             <input 
-                              value={cat.name}
+                              value={cat.name || ''}
                               onChange={(e) => {
                                 const newCats = [...localCategories];
                                 newCats[idx].name = e.target.value;
@@ -952,15 +990,46 @@ export const Admin: React.FC = () => {
                           </button>
                         </div>
                         <textarea 
-                          value={cat.description}
+                          value={cat.description || ''}
                           onChange={(e) => {
                             const newCats = [...localCategories];
                             newCats[idx].description = e.target.value;
                             setLocalCategories(newCats);
+                            setCommunityCategories(newCats);
                           }}
                           className="w-full text-sm text-gray-500 bg-white rounded-xl p-3 border-none focus:ring-1 focus:ring-accent outline-none resize-none"
                           rows={2}
                         />
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">회원 수</label>
+                            <input 
+                              type="number"
+                              value={cat.members || 0}
+                              onChange={(e) => {
+                                const newCats = [...localCategories];
+                                newCats[idx].members = parseInt(e.target.value) || 0;
+                                setLocalCategories(newCats);
+                                setCommunityCategories(newCats);
+                              }}
+                              className="w-full text-xs bg-white rounded-xl p-3 border-none focus:ring-1 focus:ring-accent outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">게시글 수</label>
+                            <input 
+                              type="number"
+                              value={cat.posts || 0}
+                              onChange={(e) => {
+                                const newCats = [...localCategories];
+                                newCats[idx].posts = parseInt(e.target.value) || 0;
+                                setLocalCategories(newCats);
+                                setCommunityCategories(newCats);
+                              }}
+                              className="w-full text-xs bg-white rounded-xl p-3 border-none focus:ring-1 focus:ring-accent outline-none"
+                            />
+                          </div>
+                        </div>
                         <div>
                           <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">이미지 URL</label>
                           <input 
@@ -969,6 +1038,7 @@ export const Admin: React.FC = () => {
                               const newCats = [...localCategories];
                               newCats[idx].imageUrl = e.target.value;
                               setLocalCategories(newCats);
+                              setCommunityCategories(newCats);
                             }}
                             className="w-full text-xs bg-white rounded-xl p-3 border-none focus:ring-1 focus:ring-accent outline-none"
                             placeholder="https://example.com/image.jpg"
@@ -984,26 +1054,43 @@ export const Admin: React.FC = () => {
                 <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
                   <div className="flex justify-between items-center mb-8">
                     <h3 className="text-xl font-bold">랭킹 관리</h3>
-                    <button 
-                      onClick={() => {
-                        const newItem = { id: Date.now().toString(), name: '사용자', score: 0, rank: localRankings.length + 1, avatar: 'https://picsum.photos/seed/user/100/100' };
-                        const newRanks = [...localRankings, newItem];
-                        setLocalRankings(newRanks);
-                        setRankings(newRanks);
-                      }}
-                      className="bg-black text-white px-6 py-3 rounded-full font-bold flex items-center space-x-2 hover:bg-[#BFFF00] hover:text-black transition-all"
-                    >
-                      <Plus size={18} />
-                      <span>랭킹 추가</span>
-                    </button>
+                    <div className="flex items-center space-x-4">
+                      <button 
+                        onClick={async () => {
+                          if (confirm('커뮤니티 활동 데이터를 기반으로 랭킹을 실시간으로 업데이트하시겠습니까?')) {
+                            await syncRankings();
+                            alert('랭킹이 업데이트되었습니다.');
+                          }
+                        }}
+                        className="bg-gray-100 text-black px-6 py-3 rounded-full font-bold flex items-center space-x-2 hover:bg-gray-200 transition-all"
+                      >
+                        <RefreshCw size={18} />
+                        <span>실시간 랭킹 업데이트</span>
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const newItem = { id: Date.now().toString(), name: '사용자', score: 0, rank: localRankings.length + 1, avatar: 'https://picsum.photos/seed/user/100/100' };
+                          const newRanks = [...localRankings, newItem];
+                          setLocalRankings(newRanks);
+                          setRankings(newRanks);
+                        }}
+                        className="bg-black text-white px-6 py-3 rounded-full font-bold flex items-center space-x-2 hover:bg-[#BFFF00] hover:text-black transition-all"
+                      >
+                        <Plus size={18} />
+                        <span>랭킹 추가</span>
+                      </button>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="text-left border-b border-gray-100">
                           <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">순위</th>
-                          <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">사용자</th>
+                          <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">사용자 선택</th>
+                          <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">닉네임</th>
                           <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">점수</th>
+                          <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">POSTS</th>
+                          <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">LIKES</th>
                           <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">아바타 URL</th>
                           <th className="pb-4 text-right">관리</th>
                         </tr>
@@ -1013,40 +1100,87 @@ export const Admin: React.FC = () => {
                           <tr key={rank.id}>
                             <td className="py-4 font-bold">{idx + 1}</td>
                             <td className="py-4">
+                              <select 
+                                className="bg-gray-50 border-none rounded-lg text-xs p-2 focus:ring-1 focus:ring-accent"
+                                onChange={(e) => {
+                                  const selectedUser = users.find(u => u.id === e.target.value);
+                                  if (selectedUser) {
+                                    const newRanks = [...localRankings];
+                                    newRanks[idx].name = selectedUser.name;
+                                    newRanks[idx].avatar = selectedUser.avatar;
+                                    setLocalRankings(newRanks);
+                                    setRankings(newRanks);
+                                  }
+                                }}
+                                value={users.find(u => u.name === rank.name)?.id || ''}
+                              >
+                                <option value="">사용자 선택</option>
+                                {users.map(u => (
+                                  <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="py-4">
                               <input 
-                                value={rank.name}
+                                value={rank.name || ''}
                                 onChange={(e) => {
                                   const newRanks = [...localRankings];
                                   newRanks[idx].name = e.target.value;
                                   setLocalRankings(newRanks);
                                   setRankings(newRanks);
                                 }}
-                                className="bg-transparent border-none focus:ring-0 p-0 font-medium"
+                                className="bg-transparent border-none focus:ring-0 p-0 font-medium w-32"
                               />
                             </td>
                             <td className="py-4">
                               <input 
                                 type="number"
-                                value={rank.score}
+                                value={rank.score || 0}
                                 onChange={(e) => {
                                   const newRanks = [...localRankings];
-                                  newRanks[idx].score = parseInt(e.target.value);
+                                  newRanks[idx].score = parseInt(e.target.value) || 0;
                                   setLocalRankings(newRanks);
                                   setRankings(newRanks);
                                 }}
-                                className="bg-transparent border-none focus:ring-0 p-0 font-medium w-20"
+                                className="bg-transparent border-none focus:ring-0 p-0 font-medium w-16"
                               />
                             </td>
                             <td className="py-4">
                               <input 
-                                value={rank.avatar}
+                                type="number"
+                                value={rank.posts || 0}
+                                onChange={(e) => {
+                                  const newRanks = [...localRankings];
+                                  newRanks[idx].posts = parseInt(e.target.value) || 0;
+                                  setLocalRankings(newRanks);
+                                  setRankings(newRanks);
+                                }}
+                                className="bg-transparent border-none focus:ring-0 p-0 font-medium w-16"
+                              />
+                            </td>
+                            <td className="py-4">
+                              <input 
+                                type="number"
+                                value={rank.likes || 0}
+                                onChange={(e) => {
+                                  const newRanks = [...localRankings];
+                                  newRanks[idx].likes = parseInt(e.target.value) || 0;
+                                  setLocalRankings(newRanks);
+                                  setRankings(newRanks);
+                                }}
+                                className="bg-transparent border-none focus:ring-0 p-0 font-medium w-16"
+                              />
+                            </td>
+                            <td className="py-4">
+                              <input 
+                                value={rank.avatar || ''}
                                 onChange={(e) => {
                                   const newRanks = [...localRankings];
                                   newRanks[idx].avatar = e.target.value;
                                   setLocalRankings(newRanks);
                                   setRankings(newRanks);
                                 }}
-                                className="bg-transparent border-none focus:ring-0 p-0 text-xs text-gray-400 w-full"
+                                className="bg-transparent border-none focus:ring-0 p-0 text-xs text-gray-400 w-48"
                               />
                             </td>
                             <td className="py-4 text-right">
@@ -1129,7 +1263,13 @@ export const Admin: React.FC = () => {
                           </button>
                         </div>
                         <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gray-200 shrink-0">
-                          <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
+                          <img 
+                            src={getSafeImageUrl(post.imageUrl)} 
+                            alt="" 
+                            className="w-full h-full object-cover" 
+                            referrerPolicy="no-referrer"
+                            onError={(e) => (e.currentTarget.src = 'https://picsum.photos/seed/error/200/200')}
+                          />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-sm truncate">@{post.author}</p>
@@ -1221,7 +1361,13 @@ export const Admin: React.FC = () => {
                           </button>
                         </div>
                         <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gray-200 shrink-0">
-                          <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
+                          <img 
+                            src={getSafeImageUrl(post.imageUrl)} 
+                            alt="" 
+                            className="w-full h-full object-cover" 
+                            referrerPolicy="no-referrer"
+                            onError={(e) => (e.currentTarget.src = 'https://picsum.photos/seed/error/200/200')}
+                          />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-sm truncate">@{post.author}</p>
@@ -1245,6 +1391,48 @@ export const Admin: React.FC = () => {
                             className="p-1.5 bg-white rounded-lg text-red-400 hover:text-red-500 shadow-sm"
                           >
                             <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {communitySubTab === 'tabs' && (
+                <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                  <h3 className="text-xl font-bold mb-8">커뮤니티 탭 순서 관리</h3>
+                  <div className="space-y-3 max-w-md">
+                    {(config.communityTabs || ['HOT', '랭킹', '코스프레', '트렌드', '카테고리']).map((tabId, index) => (
+                      <div key={tabId} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                        <div className="flex items-center space-x-4">
+                          <span className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center text-[10px] font-bold">
+                            {index + 1}
+                          </span>
+                          <span className="font-bold">{tabId}</span>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button 
+                            disabled={index === 0}
+                            onClick={() => {
+                              const newTabs = [...(config.communityTabs || ['HOT', '랭킹', '코스프레', '트렌드', '카테고리'])];
+                              [newTabs[index - 1], newTabs[index]] = [newTabs[index], newTabs[index - 1]];
+                              setConfig({ ...config, communityTabs: newTabs });
+                            }}
+                            className="p-2 hover:bg-white rounded-lg transition-colors disabled:opacity-30"
+                          >
+                            <ChevronUp size={18} />
+                          </button>
+                          <button 
+                            disabled={index === (config.communityTabs || ['HOT', '랭킹', '코스프레', '트렌드', '카테고리']).length - 1}
+                            onClick={() => {
+                              const newTabs = [...(config.communityTabs || ['HOT', '랭킹', '코스프레', '트렌드', '카테고리'])];
+                              [newTabs[index + 1], newTabs[index]] = [newTabs[index], newTabs[index + 1]];
+                              setConfig({ ...config, communityTabs: newTabs });
+                            }}
+                            className="p-2 hover:bg-white rounded-lg transition-colors disabled:opacity-30"
+                          >
+                            <ChevronDown size={18} />
                           </button>
                         </div>
                       </div>
@@ -1316,7 +1504,13 @@ export const Admin: React.FC = () => {
                             </div>
                           </div>
                         ) : (
-                          <img src={item.thumbnail} alt="" className="w-full h-full object-cover" />
+                          <img 
+                            src={getSafeImageUrl(item.thumbnail)} 
+                            alt="" 
+                            className="w-full h-full object-cover" 
+                            referrerPolicy="no-referrer"
+                            onError={(e) => (e.currentTarget.src = 'https://picsum.photos/seed/error/200/200')}
+                          />
                         )}
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center space-x-3">
                           <button 
@@ -1333,10 +1527,10 @@ export const Admin: React.FC = () => {
                             <ChevronLeft size={24} />
                           </button>
                           <button 
-                            onClick={() => {
+                            onClick={async () => {
                               const newItems = localTrendItems.filter(t => t.id !== item.id);
                               setLocalTrendItems(newItems);
-                              setTrendItems(newItems);
+                              await setTrendItems(newItems);
                             }}
                             className="p-4 rounded-full bg-red-500 text-white shadow-xl transform scale-90 group-hover:scale-100 transition-all hover:bg-red-600"
                           >
@@ -1361,7 +1555,7 @@ export const Admin: React.FC = () => {
                         <div>
                           <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">제목</label>
                           <input 
-                            value={item.title}
+                            value={item.title || ''}
                             onChange={(e) => {
                               const newItems = [...localTrendItems];
                               const updatedItem = { ...newItems[idx], title: e.target.value };
@@ -1373,23 +1567,9 @@ export const Admin: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">사용자 이름</label>
-                          <input 
-                            value={item.author || ''}
-                            onChange={(e) => {
-                              const newItems = [...localTrendItems];
-                              const updatedItem = { ...newItems[idx], author: e.target.value };
-                              newItems[idx] = updatedItem;
-                              setLocalTrendItems(newItems);
-                              setTrendItems(newItems);
-                            }}
-                            className="w-full px-5 py-3 rounded-2xl bg-white border-none focus:ring-2 focus:ring-accent outline-none font-bold"
-                          />
-                        </div>
-                        <div>
                           <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">릴스 링크</label>
                           <input 
-                            value={item.videoUrl}
+                            value={item.videoUrl || ''}
                             placeholder="https://www.instagram.com/reels/..."
                             onChange={(e) => {
                               const newItems = [...localTrendItems];
@@ -1404,7 +1584,7 @@ export const Admin: React.FC = () => {
                         <div>
                           <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">썸네일 URL</label>
                           <input 
-                            value={item.thumbnail}
+                            value={item.thumbnail || ''}
                             onChange={(e) => {
                               const newItems = [...localTrendItems];
                               const updatedItem = { ...newItems[idx], thumbnail: e.target.value };
@@ -1497,7 +1677,7 @@ export const Admin: React.FC = () => {
                           <div>
                             <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">작성자</label>
                             <input 
-                              value={review.author}
+                              value={review.author || ''}
                               onChange={(e) => {
                                 const newReviews = [...localReviews];
                                 newReviews[idx].author = e.target.value;
@@ -1513,7 +1693,7 @@ export const Admin: React.FC = () => {
                               type="number"
                               min="1"
                               max="5"
-                              value={review.rating}
+                              value={review.rating || 0}
                               onChange={(e) => {
                                 const newReviews = [...localReviews];
                                 newReviews[idx].rating = parseInt(e.target.value) || 5;
@@ -1527,7 +1707,7 @@ export const Admin: React.FC = () => {
                         <div>
                           <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">제목</label>
                           <input 
-                            value={review.title}
+                            value={review.title || ''}
                             onChange={(e) => {
                               const newReviews = [...localReviews];
                               newReviews[idx].title = e.target.value;
@@ -1539,7 +1719,7 @@ export const Admin: React.FC = () => {
                         <div>
                           <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">이미지 URL</label>
                           <input 
-                            value={review.imageUrl}
+                            value={review.imageUrl || ''}
                             onChange={(e) => {
                               const newReviews = [...localReviews];
                               newReviews[idx].imageUrl = e.target.value;
@@ -1552,7 +1732,7 @@ export const Admin: React.FC = () => {
                           <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">내용</label>
                           <textarea 
                             rows={3}
-                            value={review.content}
+                            value={review.content || ''}
                             onChange={(e) => {
                               const newReviews = [...localReviews];
                               newReviews[idx].content = e.target.value;
@@ -1565,6 +1745,267 @@ export const Admin: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'users' && (
+            <motion.div
+              key="users"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-12"
+            >
+              {/* User Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500">
+                      <Users size={24} />
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-400 font-bold">전체 회원</div>
+                      <div className="text-2xl font-black">{users.length}명</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-accent/10 rounded-2xl flex items-center justify-center text-accent">
+                      <Lock size={24} />
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-400 font-bold">관리자</div>
+                      <div className="text-2xl font-black">{users.filter(u => u.isAdmin).length}명</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center text-green-500">
+                      <CheckCircle size={24} />
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-400 font-bold">일반 회원</div>
+                      <div className="text-2xl font-black">{users.filter(u => !u.isAdmin).length}명</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-xl font-bold">회원 관리 목록</h3>
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm text-gray-400 font-bold">가입일 순 정렬</div>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left border-b border-gray-100">
+                        <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">회원 정보</th>
+                        <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">이메일 / 가입방식</th>
+                        <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">상태</th>
+                        <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">가입일 / 최근 활동</th>
+                        <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">관리자 여부</th>
+                        <th className="pb-4 text-right">관리</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {[...users].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).map((u) => (
+                        <tr key={u.id}>
+                          <td className="py-6">
+                            <div className="flex items-center space-x-4">
+                              <div className="relative">
+                                <img 
+                                  src={getSafeImageUrl(u.avatar)} 
+                                  alt="" 
+                                  className="w-10 h-10 rounded-full object-cover" 
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => (e.currentTarget.src = 'https://picsum.photos/seed/avatar/100/100')}
+                                />
+                                {u.lastLogin && new Date(u.lastLogin).getTime() > Date.now() - 10 * 60 * 1000 && (
+                                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-bold">{u.name}</div>
+                                <div className="text-xs text-gray-400">ID: {u.id}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-6">
+                            <div className="text-sm font-medium">{u.email}</div>
+                            <div className="flex items-center gap-1 mt-1">
+                              {u.loginMethod === 'google' ? (
+                                <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase">Google Login</span>
+                              ) : (
+                                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold uppercase">Email Signup</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-6">
+                            <div className="flex items-center gap-2">
+                              {u.lastLogin && new Date(u.lastLogin).getTime() > Date.now() - 10 * 60 * 1000 ? (
+                                <span className="flex items-center gap-1.5 text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full uppercase">
+                                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                                  Online
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full uppercase">Offline</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-6">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 text-xs text-gray-400">
+                                <span className="font-bold uppercase tracking-widest">가입:</span>
+                                <span>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-gray-400">
+                                <span className="font-bold uppercase tracking-widest">로그인:</span>
+                                <span className="text-gray-600">{u.lastLogin ? new Date(u.lastLogin).toLocaleString() : '기록 없음'}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-6">
+                            <button 
+                              onClick={() => updateUser(u.id, { isAdmin: !u.isAdmin })}
+                              className={cn(
+                                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all",
+                                u.isAdmin ? "bg-accent text-black" : "bg-gray-100 text-gray-400"
+                              )}
+                            >
+                              {u.isAdmin ? 'ADMIN' : 'USER'}
+                            </button>
+                          </td>
+                          <td className="py-6 text-right">
+                            <button 
+                              onClick={async () => {
+                                if (confirm('정말로 이 회원을 삭제하시겠습니까?')) {
+                                  await deleteUser(u.id);
+                                }
+                              }}
+                              className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'saleApplications' && (
+            <motion.div
+              key="saleApplications"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-8"
+            >
+              <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-xl font-bold">판매 신청 관리 ({saleApplications.length})</h3>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left border-b border-gray-100">
+                        <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">상품 정보</th>
+                        <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">신청자</th>
+                        <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">가격</th>
+                        <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400">상태</th>
+                        <th className="pb-4 text-xs font-bold uppercase tracking-widest text-gray-400 text-right">관리</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {saleApplications.map((app) => (
+                        <tr key={app.id} className="group">
+                          <td className="py-6">
+                            <div className="flex items-center space-x-4">
+                              <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 border border-gray-100 flex-shrink-0">
+                                <img 
+                                  src={getSafeImageUrl(app.imageUrl)} 
+                                  alt="" 
+                                  className="w-full h-full object-cover" 
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                              <div>
+                                <p className="font-bold text-sm">{app.productName}</p>
+                                <p className="text-xs text-gray-400">{app.category}</p>
+                                <p className="text-xs text-gray-500 mt-1 line-clamp-1 max-w-xs">{app.description}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-6">
+                            <p className="text-sm font-bold">{app.authorEmail}</p>
+                            <p className="text-[10px] text-gray-400">{app.createdAt?.toDate ? app.createdAt.toDate().toLocaleString() : 'N/A'}</p>
+                          </td>
+                          <td className="py-6 font-black text-sm">₩{app.price.toLocaleString()}</td>
+                          <td className="py-6">
+                            <span className={cn(
+                              "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                              app.status === 'approved' ? "bg-green-100 text-green-600" :
+                              app.status === 'rejected' ? "bg-red-100 text-red-600" :
+                              "bg-orange-100 text-orange-600"
+                            )}>
+                              {app.status === 'approved' ? 'APPROVED' : app.status === 'rejected' ? 'REJECTED' : 'PENDING'}
+                            </span>
+                          </td>
+                          <td className="py-6 text-right">
+                            <div className="flex justify-end space-x-2">
+                              {app.status === 'pending' && (
+                                <>
+                                  <button 
+                                    onClick={() => updateSaleApplicationStatus(app.id, 'approved')}
+                                    className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-all"
+                                    title="승인"
+                                  >
+                                    <CheckCircle size={18} />
+                                  </button>
+                                  <button 
+                                    onClick={() => updateSaleApplicationStatus(app.id, 'rejected')}
+                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all"
+                                    title="거절"
+                                  >
+                                    <X size={18} />
+                                  </button>
+                                </>
+                              )}
+                              <button 
+                                onClick={() => {
+                                  if (confirm('이 신청서를 삭제하시겠습니까?')) {
+                                    deleteSaleApplication(app.id);
+                                  }
+                                }}
+                                className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-red-500 transition-all"
+                                title="삭제"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {saleApplications.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-24 text-center text-gray-400 font-bold uppercase tracking-widest">
+                            판매 신청 내역이 없습니다.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </motion.div>
           )}
@@ -1627,7 +2068,7 @@ export const Admin: React.FC = () => {
                   <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">제목</label>
                   <textarea 
                     rows={2}
-                    value={editingBanner.title} 
+                    value={editingBanner.title || ''} 
                     onChange={(e) => setEditingBanner({ ...editingBanner, title: e.target.value })}
                     className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-bold"
                   />
@@ -1636,7 +2077,7 @@ export const Admin: React.FC = () => {
                   <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">서브제목</label>
                   <textarea 
                     rows={2}
-                    value={editingBanner.subtitle} 
+                    value={editingBanner.subtitle || ''} 
                     onChange={(e) => setEditingBanner({ ...editingBanner, subtitle: e.target.value })}
                     className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-medium text-gray-600"
                   />
@@ -1658,7 +2099,7 @@ export const Admin: React.FC = () => {
                     <div className="flex-1">
                       <input 
                         type="text" 
-                        value={editingBanner.imageUrl} 
+                        value={editingBanner.imageUrl || ''} 
                         onChange={(e) => setEditingBanner({ ...editingBanner, imageUrl: e.target.value })}
                         placeholder="https://example.com/image.jpg"
                         className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-mono text-xs"
@@ -1726,7 +2167,7 @@ export const Admin: React.FC = () => {
                   <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">제목</label>
                   <input 
                     type="text" 
-                    value={editingPost.title} 
+                    value={editingPost.title || ''} 
                     onChange={(e) => setEditingPost({ ...editingPost, title: e.target.value })}
                     className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-bold"
                   />
@@ -1735,7 +2176,7 @@ export const Admin: React.FC = () => {
                   <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">작성자</label>
                   <input 
                     type="text" 
-                    value={editingPost.author} 
+                    value={editingPost.author || ''} 
                     onChange={(e) => setEditingPost({ ...editingPost, author: e.target.value })}
                     className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-bold"
                   />
@@ -1743,16 +2184,31 @@ export const Admin: React.FC = () => {
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">카테고리</label>
                   <select 
-                    value={editingPost.category} 
+                    value={editingPost.category || ''} 
                     onChange={(e) => setEditingPost({ ...editingPost, category: e.target.value })}
                     className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-bold"
                   >
-                    <option value="Notice">공지사항</option>
+                    <option value="Notice">NOTICE</option>
                     <option value="Event">이벤트</option>
                     <option value="News">뉴스</option>
                     <option value="HOT">HOT</option>
                     <option value="코스프레">코스프레</option>
+                    <optgroup label="커뮤니티 카테고리">
+                      {communityCategories.map(cat => (
+                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                      ))}
+                    </optgroup>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">작성일</label>
+                  <input 
+                    type="date" 
+                    value={editingPost.date ? new Date(editingPost.date).toISOString().split('T')[0] : 
+                           editingPost.createdAt ? new Date(editingPost.createdAt).toISOString().split('T')[0] : ''} 
+                    onChange={(e) => setEditingPost({ ...editingPost, date: e.target.value, createdAt: e.target.value })}
+                    className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-bold"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">이미지 URL</label>
@@ -1760,7 +2216,7 @@ export const Admin: React.FC = () => {
                     <div className="flex-1">
                       <input 
                         type="text" 
-                        value={editingPost.imageUrl} 
+                        value={editingPost.imageUrl || ''} 
                         onChange={(e) => setEditingPost({ ...editingPost, imageUrl: e.target.value })}
                         placeholder="https://example.com/image.jpg"
                         className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-mono text-xs"
@@ -1793,7 +2249,7 @@ export const Admin: React.FC = () => {
                   <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">내용</label>
                   <textarea 
                     rows={6}
-                    value={editingPost.content} 
+                    value={editingPost.content || ''} 
                     onChange={(e) => setEditingPost({ ...editingPost, content: e.target.value })}
                     className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-medium text-gray-600"
                   />
@@ -1842,7 +2298,7 @@ export const Admin: React.FC = () => {
                   <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">상품명</label>
                   <input 
                     type="text" 
-                    value={editingProduct.name} 
+                    value={editingProduct.name || ''} 
                     onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
                     className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-bold"
                   />
@@ -1862,7 +2318,7 @@ export const Admin: React.FC = () => {
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">카테고리</label>
                     <select 
-                      value={editingProduct.category} 
+                      value={editingProduct.category || ''} 
                       onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
                       className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-bold"
                     >
@@ -1879,7 +2335,7 @@ export const Admin: React.FC = () => {
                     <div className="flex-1">
                       <input 
                         type="text" 
-                        value={editingProduct.imageUrl} 
+                        value={editingProduct.imageUrl || ''} 
                         onChange={(e) => setEditingProduct({ ...editingProduct, imageUrl: e.target.value })}
                         placeholder="https://example.com/product.jpg"
                         className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-mono text-xs"
@@ -1902,7 +2358,7 @@ export const Admin: React.FC = () => {
                   <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">설명 (간략)</label>
                   <textarea 
                     rows={2}
-                    value={editingProduct.description} 
+                    value={editingProduct.description || ''} 
                     onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
                     className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-medium text-gray-600"
                   />
@@ -1975,7 +2431,7 @@ export const Admin: React.FC = () => {
                       <div key={idx} className="flex gap-2">
                         <input 
                           type="text" 
-                          value={img} 
+                          value={img || ''} 
                           onChange={(e) => {
                             const newImages = [...(editingProduct.detailImages || [])];
                             newImages[idx] = e.target.value;
@@ -2013,7 +2469,7 @@ export const Admin: React.FC = () => {
                       <div key={idx} className="flex gap-2">
                         <input 
                           type="text" 
-                          value={feature} 
+                          value={feature || ''} 
                           onChange={(e) => {
                             const newFeatures = [...(editingProduct.premiumFeatures || ['고급 소재 사용', '정밀한 디테일 구현', '안전한 패키징', '공식 라이선스 인증'])];
                             newFeatures[idx] = e.target.value;

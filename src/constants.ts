@@ -23,17 +23,12 @@ export const defaultConfig: SiteConfig = {
     }
   ],
   primaryColor: '#FFFFFF',
-  accentColor: '#BFFF00',
+  accentColor: '#000000',
   backgroundColor: '#FFFFFF',
   fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif',
   logoUrl: 'https://picsum.photos/seed/animation-logo/200/50',
-  productCategories: ['피규어', '문구/팬시', '인형', '코스프레', '기타'],
-  communityTabs: [
-    { id: 'hot', name: 'HOT' },
-    { id: 'categories', name: '카테고리' },
-    { id: 'ranking', name: '랭킹' },
-    { id: 'cosplay', name: '코스프레' },
-  ],
+  productCategories: ['의상', '가발', '소품', '신발', '피규어', '문구', '인형', '코스프레', '기타'],
+  communityTabs: ['HOT', '랭킹', '코스프레', '트렌드', '카테고리'],
   footerDescription: '현대적인 디자인과 커뮤니티가 만나는 곳. OTAMONO은 당신의 창의성을 현실로 바꿉니다.',
 };
 
@@ -53,7 +48,7 @@ export const defaultProducts: Product[] = [
     price: 28000,
     description: '매일매일이 즐거워지는 귀여운 캐릭터 다이어리 패키지입니다.',
     imageUrl: 'https://picsum.photos/seed/stat1/800/800',
-    category: '문구/팬시',
+    category: '문구',
     discountRate: 10,
   },
   {
@@ -91,9 +86,9 @@ export const defaultPosts: Post[] = [
 ];
 
 export const defaultTrendItems: TrendItem[] = [
-  { id: '1', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-girl-in-neon-light-34332-large.mp4', title: '네온 시티 코스프레', thumbnail: 'https://picsum.photos/seed/trend1/400/600', author: '코스플레이어A', likes: 1240 },
-  { id: '2', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-mysterious-woman-in-a-dark-forest-4332-large.mp4', title: '숲속의 요정', thumbnail: 'https://picsum.photos/seed/trend2/400/600', author: '아트디렉터B', likes: 850 },
-  { id: '3', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-young-woman-with-blue-hair-in-a-futuristic-setting-34335-large.mp4', title: '사이버펑크 2077', thumbnail: 'https://picsum.photos/seed/trend3/400/600', author: '미래지향C', likes: 2100 },
+  { id: '1', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-girl-in-neon-light-34332-large.mp4', title: '네온 시티 코스프레', thumbnail: 'https://picsum.photos/seed/trend1/400/600', likes: 0 },
+  { id: '2', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-mysterious-woman-in-a-dark-forest-4332-large.mp4', title: '숲속의 요정', thumbnail: 'https://picsum.photos/seed/trend2/400/600', likes: 0 },
+  { id: '3', videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-young-woman-with-blue-hair-in-a-futuristic-setting-34335-large.mp4', title: '사이버펑크 2077', thumbnail: 'https://picsum.photos/seed/trend3/400/600', likes: 0 },
 ];
 
 export const defaultReviews = [

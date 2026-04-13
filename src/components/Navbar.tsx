@@ -1,27 +1,28 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ShoppingCart, User, Menu, X, LayoutDashboard, Share2, LogOut, ShoppingBag, Heart } from 'lucide-react';
 import { useApp } from '../store';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { LoginModal } from './LoginModal';
+import { getSafeImageUrl } from '../utils/imageUtils';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export const Navbar: React.FC = () => {
-  const { config, user, logout, cart, products, wishlist } = useApp();
+  const { config, user, logout, cart, products, wishlist, isLoginModalOpen, setIsLoginModalOpen } = useApp();
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const navLinks = [
     { name: 'HOME', path: '/' },
     { name: 'SHOP', path: '/shop' },
-    { name: '커뮤니티', path: '/community' },
-    { name: '트렌드', path: '/trend' },
-    { name: '공지사항', path: '/notice' },
+    { name: 'COMMUNITY', path: '/community' },
+    { name: 'NOTICE', path: '/notice' },
+    { name: 'SELL', path: '/sell' },
   ];
 
   return (
@@ -67,25 +68,27 @@ export const Navbar: React.FC = () => {
                   {link.name}
                 </Link>
               ))}
-              <Link
-                to="/sell"
-                className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-black hover:opacity-80 transition-all"
-                title="판매 신청"
-              >
-                <ShoppingBag size={18} />
-              </Link>
             </div>
 
             {/* Icons & My Page */}
             <div className="hidden md:flex items-center space-x-6">
-              <Link to="/wishlist" className="p-2 hover:bg-gray-50 rounded-full transition-colors relative">
+              <button 
+                onClick={() => {
+                  if (!user) {
+                    setIsLoginModalOpen(true);
+                  } else {
+                    window.location.href = '/wishlist';
+                  }
+                }}
+                className="p-2 hover:bg-gray-50 rounded-full transition-colors relative"
+              >
                 <Heart size={24} className="text-black" />
                 {wishlist.length > 0 && (
                   <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                     {wishlist.length}
                   </span>
                 )}
-              </Link>
+              </button>
               <Link to="/cart" className="p-2 hover:bg-gray-50 rounded-full transition-colors relative">
                 <ShoppingCart size={24} className="text-black" />
                 {cart.filter(item => products.some(p => p.id === item.productId)).length > 0 && (
@@ -94,12 +97,31 @@ export const Navbar: React.FC = () => {
                   </span>
                 )}
               </Link>
-              <Link 
-                to="/mypage" 
-                className="p-2 hover:bg-gray-50 rounded-full transition-colors"
+              <button 
+                onClick={() => {
+                  if (user) {
+                    navigate('/mypage');
+                  } else {
+                    setIsLoginModalOpen(true);
+                  }
+                }}
+                className="p-1 hover:bg-gray-50 rounded-full transition-colors flex items-center"
               >
-                <User size={24} className="text-black" />
-              </Link>
+                {user ? (
+                  <img 
+                    src={getSafeImageUrl(user.avatar)} 
+                    alt={user.name} 
+                    className="w-8 h-8 rounded-full border-2 border-accent object-cover"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = 'https://picsum.photos/seed/avatar/100/100';
+                    }}
+                  />
+                ) : (
+                  <User size={24} className="text-black" />
+                )}
+              </button>
             </div>
 
             {/* Mobile Menu Button */}
@@ -128,16 +150,6 @@ export const Navbar: React.FC = () => {
                   {link.name}
                 </Link>
               ))}
-              <Link
-                to="/sell"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center space-x-3 px-3 py-3 rounded-md text-lg font-bold text-black"
-              >
-                <span className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center">
-                  <ShoppingBag size={24} />
-                </span>
-                <span>판매 신청</span>
-              </Link>
             </div>
             
             <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
@@ -160,7 +172,16 @@ export const Navbar: React.FC = () => {
                 </Link>
                 {user ? (
                   <div className="flex items-center space-x-3">
-                    <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full border-2 border-accent" />
+                    <img 
+                      src={getSafeImageUrl(user.avatar)} 
+                      alt={user.name} 
+                      className="w-10 h-10 rounded-full border-2 border-accent"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'https://picsum.photos/seed/avatar/100/100';
+                      }}
+                    />
                     <span className="text-sm font-bold">{user.name}</span>
                   </div>
                 ) : (

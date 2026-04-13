@@ -3,7 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { defaultConfig, defaultProducts, defaultPosts, defaultTrendItems, defaultReviews } from "./src/constants";
+import { defaultConfig, defaultProducts, defaultPosts, defaultTrendItems, defaultReviews } from "./src/constants.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,7 +63,7 @@ function saveData() {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = parseInt(process.env.PORT || "3000", 10);
 
   app.use(express.json({ limit: '50mb' }));
 
@@ -130,25 +130,115 @@ async function startServer() {
   });
 
   // Image proxy to bypass CORS/Referrer issues (e.g., for Pinterest)
+  const imageCache = new Map<string, { buffer: Buffer, contentType: string, timestamp: number }>();
+  const CACHE_TTL = 24 * 3600 * 1000; // 24 hours
+  const MAX_CACHE_SIZE = 2000;
+
   app.get("/api/proxy-image", async (req, res) => {
     const imageUrl = req.query.url as string;
     if (!imageUrl) return res.status(400).send("URL is required");
 
-    try {
-      const response = await fetch(imageUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        },
-      });
+    // Check cache
+    const cached = imageCache.get(imageUrl);
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+      console.log(`Proxy Cache Hit: ${imageUrl}`);
+      if (cached.contentType) res.setHeader("Content-Type", cached.contentType);
+      res.setHeader("Cache-Control", "public, max-age=86400"); // 1 day client-side cache
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      return res.send(cached.buffer);
+    }
 
-      if (!response.ok) throw new Error("Failed to fetch image");
+    // Known safe CDNs that work well with referrerPolicy="no-referrer"
+    const safeHosts = [
+      'picsum.photos',
+      'images.unsplash.com',
+      'i.pravatar.cc',
+      'ui-avatars.com',
+      'images.pexels.com',
+      'res.cloudinary.com',
+      'i.pinimg.com',
+      'pinimg.com',
+      'cdn.pixabay.com',
+      'images.remote.com',
+      'giphy.com',
+      'media.giphy.com'
+    ];
+
+    try {
+      const parsedUrl = new URL(imageUrl);
+      if (safeHosts.some(host => parsedUrl.hostname.includes(host))) {
+        console.log(`Proxy Redirect to Safe Host: ${imageUrl}`);
+        return res.redirect(imageUrl);
+      }
+    } catch (e) {
+      // Invalid URL, continue to proxy or fail
+    }
+
+    console.log(`Proxy Fetching: ${imageUrl}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+    try {
+      const fetchWithHeaders = async (url: string, mode: 'desktop' | 'alternative' | 'mobile' = 'desktop') => {
+        const userAgents = {
+          desktop: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          alternative: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+          mobile: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
+        };
+
+        const headers: Record<string, string> = {
+          "User-Agent": userAgents[mode],
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache",
+          "Upgrade-Insecure-Requests": "1",
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Sec-Fetch-User": "?1"
+        };
+
+        // Add Referer for Pinterest links
+        if (url.includes("pinterest.com") || url.includes("pin.it")) {
+          headers["Referer"] = "https://www.pinterest.com/";
+        }
+
+        return await fetch(url, {
+          headers,
+          signal: controller.signal,
+          redirect: 'follow'
+        });
+      };
+
+      let response = await fetchWithHeaders(imageUrl);
+
+      // Retry once with a different User-Agent if we get a 500 or 403
+      if (response.status >= 500 || response.status === 403) {
+        console.log(`Initial fetch for ${imageUrl} failed with ${response.status}, retrying with alternative UA...`);
+        await new Promise(r => setTimeout(r, 500)); // Wait 0.5s
+        response = await fetchWithHeaders(imageUrl, 'alternative');
+      }
+
+      clearTimeout(timeoutId);
+
+      if (response.status === 429) {
+        console.warn(`Rate limited by ${imageUrl}, redirecting client directly`);
+        return res.redirect(imageUrl);
+      }
+
+      if (!response.ok) {
+        console.warn(`Proxy fetch failed for ${imageUrl} with status ${response.status}. Redirecting to original.`);
+        return res.redirect(imageUrl);
+      }
 
       const contentType = response.headers.get("content-type") || "";
+      const buffer = await response.arrayBuffer();
+      const nodeBuffer = Buffer.from(buffer);
       
       // If it's an HTML page (like a Pinterest Pin page), try to extract the image URL
       if (contentType.includes("text/html")) {
-        const html = await response.text();
+        const html = nodeBuffer.toString('utf-8');
         
         // Try to find og:image or other image meta tags
         const ogImageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
@@ -157,34 +247,73 @@ async function startServer() {
         const twitterImageMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ||
                                  html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
 
-        const extractedUrl = ogImageMatch?.[1] || twitterImageMatch?.[1];
+        // Pinterest specific extraction from JSON or script tags if meta tags fail
+        const pinterestPatterns = [
+          /\"original\":\s*\{\"url\":\s*\"(https:\/\/i\.pinimg\.com\/originals\/[^\"]+)\"/i,
+          /\"url\":\s*\"(https:\/\/i\.pinimg\.com\/[^\"]+)\"/i,
+          /https:\/\/i\.pinimg\.com\/originals\/[^"']+/i,
+          /https:\/\/i\.pinimg\.com\/736x\/[^"']+/i,
+          /https:\/\/i\.pinimg\.com\/[^\s"'>]+/i
+        ];
+
+        let extractedUrl = ogImageMatch?.[1] || twitterImageMatch?.[1];
+        
+        if (!extractedUrl) {
+          for (const pattern of pinterestPatterns) {
+            const match = html.match(pattern);
+            if (match) {
+              extractedUrl = match[1] || match[0];
+              break;
+            }
+          }
+        }
 
         if (extractedUrl) {
+          extractedUrl = extractedUrl.replace(/\\u002f/g, '/');
           console.log(`Extracted image URL from HTML: ${extractedUrl}`);
           // Fetch the actual image
-          const imgResponse = await fetch(extractedUrl, {
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              "Referer": imageUrl
-            }
-          });
+          const imgResponse = await fetchWithHeaders(extractedUrl);
           
           if (imgResponse.ok) {
-            const imgContentType = imgResponse.headers.get("content-type");
-            if (imgContentType) res.setHeader("Content-Type", imgContentType);
-            const buffer = await imgResponse.arrayBuffer();
-            return res.send(Buffer.from(buffer));
+            const imgContentType = imgResponse.headers.get("content-type") || "image/jpeg";
+            const imgBuffer = await imgResponse.arrayBuffer();
+            const imgNodeBuffer = Buffer.from(imgBuffer);
+            
+            // Cache the result
+            imageCache.set(imageUrl, { buffer: imgNodeBuffer, contentType: imgContentType, timestamp: Date.now() });
+            if (imageCache.size > MAX_CACHE_SIZE) imageCache.delete(imageCache.keys().next().value); // Simple LRU-ish
+
+            res.setHeader("Content-Type", imgContentType);
+            res.setHeader("Cache-Control", "public, max-age=86400");
+            res.setHeader("Access-Control-Allow-Origin", "*");
+            return res.send(imgNodeBuffer);
           }
         }
       }
 
-      // If it's already an image or we couldn't extract one, return as is
+      // If it's already an image or we couldn't extract one, cache and return
+      if (contentType.startsWith("image/")) {
+        imageCache.set(imageUrl, { buffer: nodeBuffer, contentType, timestamp: Date.now() });
+        if (imageCache.size > MAX_CACHE_SIZE) imageCache.delete(imageCache.keys().next().value);
+      }
+
       if (contentType) res.setHeader("Content-Type", contentType);
-      const buffer = await response.arrayBuffer();
-      res.send(Buffer.from(buffer));
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.send(nodeBuffer);
     } catch (error) {
-      console.error("Proxy error:", error);
-      res.status(500).send("Error fetching image");
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error(`Proxy timeout for ${imageUrl}`);
+      } else {
+        console.error("Proxy error:", error);
+      }
+      // Fallback: Redirect to original URL if proxy fails
+      try {
+        if (!res.headersSent) res.redirect(imageUrl);
+      } catch (e) {
+        console.error("Error during fallback redirect:", e);
+      }
     }
   });
 

@@ -1,23 +1,43 @@
 import React, { useState } from 'react';
 import { useApp } from '../store';
-import { Package, Send, AlertCircle, CheckCircle } from 'lucide-react';
+import { Package, Send, AlertCircle, CheckCircle, Loader2, Tag, Info, DollarSign, Image as ImageIcon, LayoutGrid } from 'lucide-react';
 import { motion } from 'motion/react';
+import { db } from '../firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export const Sell: React.FC = () => {
   const { config, user } = useApp();
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     productName: '',
-    category: '피규어',
+    category: '의상',
     description: '',
     price: '',
     imageUrl: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would send to an API
-    setIsSubmitted(true);
+    if (!user) return;
+
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, 'saleApplications'), {
+        ...formData,
+        price: Number(formData.price),
+        authorId: user.id,
+        authorEmail: user.email,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      setIsSubmitted(true);
+    } catch (error) {
+      console.error('Error submitting sale application:', error);
+      alert('신청 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (isSubmitted) {
@@ -39,10 +59,19 @@ export const Sell: React.FC = () => {
             </p>
           </div>
           <button 
-            onClick={() => setIsSubmitted(false)}
+            onClick={() => {
+              setIsSubmitted(false);
+              setFormData({
+                productName: '',
+                category: '의상',
+                description: '',
+                price: '',
+                imageUrl: '',
+              });
+            }}
             className="w-full py-4 bg-black text-white rounded-2xl font-black uppercase tracking-widest hover:bg-gray-800 transition-all"
           >
-            추가 신청하기
+            뒤로 가기
           </button>
         </motion.div>
       </div>
@@ -54,10 +83,9 @@ export const Sell: React.FC = () => {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <header className="mb-16 text-center">
           <div className="inline-flex items-center space-x-2 bg-accent/20 px-4 py-2 rounded-full mb-6">
-            <Package size={16} className="text-black" />
             <span className="text-xs font-bold tracking-widest uppercase">Sell with Us</span>
           </div>
-          <h1 className="text-6xl font-black tracking-tighter uppercase mb-6">판매 신청</h1>
+          <h1 className="text-6xl font-black tracking-tighter uppercase mb-6">SELL</h1>
           <p className="text-gray-400 font-medium max-w-lg mx-auto">
             당신의 소중한 굿즈와 창작물을 {config.name}에서 판매해보세요.<br />
             전문적인 검수와 배송 대행 서비스를 제공합니다.
@@ -74,80 +102,112 @@ export const Sell: React.FC = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-8 bg-gray-50 p-8 md:p-12 rounded-[3rem]">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-2">상품명</label>
-              <input 
-                required
-                type="text" 
-                placeholder="상품 이름을 입력하세요"
-                className="w-full px-6 py-4 rounded-2xl bg-white border-none focus:ring-2 focus:ring-accent outline-none font-bold"
-                value={formData.productName}
-                onChange={(e) => setFormData({...formData, productName: e.target.value})}
-              />
+        <form onSubmit={handleSubmit} className="space-y-10 bg-white p-10 md:p-16 rounded-[4rem] shadow-2xl shadow-gray-100 border border-gray-100">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            <div className="space-y-3">
+              <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-4 flex items-center gap-2">
+                <Tag size={14} />
+                <span>상품명</span>
+              </label>
+              <div className="relative group">
+                <input 
+                  required
+                  type="text" 
+                  placeholder="상품 이름을 입력하세요"
+                  className="w-full px-8 py-5 rounded-[2rem] bg-gray-50 border-2 border-transparent focus:border-black focus:bg-white outline-none font-bold transition-all"
+                  value={formData.productName}
+                  onChange={(e) => setFormData({...formData, productName: e.target.value})}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-2">카테고리</label>
-              <select 
-                className="w-full px-6 py-4 rounded-2xl bg-white border-none focus:ring-2 focus:ring-accent outline-none font-bold appearance-none"
-                value={formData.category}
-                onChange={(e) => setFormData({...formData, category: e.target.value})}
-              >
-                <option>피규어</option>
-                <option>문구/팬시</option>
-                <option>인형</option>
-                <option>코스프레</option>
-                <option>기타</option>
-              </select>
+            <div className="space-y-3">
+              <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-4 flex items-center gap-2">
+                <LayoutGrid size={14} />
+                <span>카테고리</span>
+              </label>
+              <div className="relative group">
+                <select 
+                  className="w-full px-8 py-5 rounded-[2rem] bg-gray-50 border-2 border-transparent focus:border-black focus:bg-white outline-none font-bold appearance-none cursor-pointer transition-all"
+                  value={formData.category}
+                  onChange={(e) => setFormData({...formData, category: e.target.value})}
+                >
+                  <option>의상</option>
+                  <option>가발</option>
+                  <option>소품</option>
+                  <option>신발</option>
+                  <option>피규어</option>
+                  <option>문구</option>
+                  <option>인형</option>
+                  <option>코스프레</option>
+                  <option>기타</option>
+                </select>
+                <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <Package size={18} />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-2">상품 설명</label>
+          <div className="space-y-3">
+            <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-4 flex items-center gap-2">
+              <Info size={14} />
+              <span>상품 설명</span>
+            </label>
             <textarea 
               required
-              rows={4}
-              placeholder="상품에 대한 자세한 설명을 입력하세요"
-              className="w-full px-6 py-4 rounded-2xl bg-white border-none focus:ring-2 focus:ring-accent outline-none font-bold resize-none"
+              rows={5}
+              placeholder="상품에 대한 자세한 설명을 입력하세요 (상태, 구성품 등)"
+              className="w-full px-8 py-6 rounded-[2.5rem] bg-gray-50 border-2 border-transparent focus:border-black focus:bg-white outline-none font-bold resize-none transition-all"
               value={formData.description}
               onChange={(e) => setFormData({...formData, description: e.target.value})}
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-2">희망 판매가 (₩)</label>
-              <input 
-                required
-                type="number" 
-                placeholder="0"
-                className="w-full px-6 py-4 rounded-2xl bg-white border-none focus:ring-2 focus:ring-accent outline-none font-bold"
-                value={formData.price}
-                onChange={(e) => setFormData({...formData, price: e.target.value})}
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            <div className="space-y-3">
+              <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-4 flex items-center gap-2">
+                <DollarSign size={14} />
+                <span>희망 판매가 (₩)</span>
+              </label>
+              <div className="relative">
+                <input 
+                  required
+                  type="number" 
+                  placeholder="0"
+                  className="w-full px-8 py-5 rounded-[2rem] bg-gray-50 border-2 border-transparent focus:border-black focus:bg-white outline-none font-bold transition-all"
+                  value={formData.price}
+                  onChange={(e) => setFormData({...formData, price: e.target.value})}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-2">상품 이미지 URL</label>
-              <input 
-                required
-                type="url" 
-                placeholder="https://..."
-                className="w-full px-6 py-4 rounded-2xl bg-white border-none focus:ring-2 focus:ring-accent outline-none font-bold"
-                value={formData.imageUrl}
-                onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
-              />
+            <div className="space-y-3">
+              <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-4 flex items-center gap-2">
+                <ImageIcon size={14} />
+                <span>상품 이미지 URL</span>
+              </label>
+              <div className="relative">
+                <input 
+                  required
+                  type="url" 
+                  placeholder="https://..."
+                  className="w-full px-8 py-5 rounded-[2rem] bg-gray-50 border-2 border-transparent focus:border-black focus:bg-white outline-none font-bold transition-all"
+                  value={formData.imageUrl}
+                  onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
+                />
+              </div>
             </div>
           </div>
 
-          <button 
-            disabled={!user}
-            type="submit"
-            className="w-full py-6 bg-black text-white rounded-2xl font-black uppercase tracking-widest hover:bg-gray-800 transition-all flex items-center justify-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send size={20} />
-            <span>신청서 제출하기</span>
-          </button>
+          <div className="pt-6">
+            <button 
+              disabled={!user || isSubmitting}
+              type="submit"
+              className="w-full py-8 bg-black text-white rounded-[2.5rem] font-black uppercase tracking-[0.2em] text-lg hover:bg-accent hover:text-black transition-all flex items-center justify-center space-x-4 disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl shadow-black/10 hover:shadow-accent/20 group"
+            >
+              {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />}
+              <span>{isSubmitting ? '제출 중...' : '신청서 제출하기'}</span>
+            </button>
+          </div>
         </form>
 
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">

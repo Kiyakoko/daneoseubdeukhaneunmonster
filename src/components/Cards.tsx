@@ -11,7 +11,7 @@ interface ProductCardProps {
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) => {
-  const { addToCart, wishlist, toggleWishlist } = useApp();
+  const { addToCart, wishlist, toggleWishlist, setIsLoginModalOpen, user } = useApp();
   const isBookmarked = wishlist.includes(product.id);
   const safeImageUrl = getSafeImageUrl(product.imageUrl);
 
@@ -28,12 +28,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) =>
           alt={product.name}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            e.currentTarget.src = 'https://picsum.photos/seed/error/800/1000';
+          }}
         />
         
         {/* Bookmark Button */}
         <button 
           onClick={(e) => {
             e.stopPropagation();
+            if (!user) {
+              setIsLoginModalOpen(true);
+              return;
+            }
             toggleWishlist(product.id);
           }}
           className="absolute top-3 right-3 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-white transition-colors z-20"
@@ -49,6 +56,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) =>
         <button 
           onClick={(e) => {
             e.stopPropagation();
+            if (!user) {
+              alert('로그인이 필요합니다.');
+              setIsLoginModalOpen(true);
+              return;
+            }
             addToCart(product.id);
           }}
           className="absolute bottom-3 right-3 p-3 bg-black text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0 z-20 hover:bg-accent hover:text-black"
@@ -93,6 +105,9 @@ export const ReviewCard: React.FC<ReviewCardProps> = ({ review }) => {
           alt={review.title} 
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            e.currentTarget.src = 'https://picsum.photos/seed/error/400/400';
+          }}
         />
       </div>
       <div className="flex mb-1">
@@ -119,8 +134,8 @@ interface ReelItemProps {
 }
 
 export const ReelItem: React.FC<ReelItemProps> = ({ post }) => {
-  const { updateTrendItem } = useApp();
-  const [isLiked, setIsLiked] = React.useState(false);
+  const { toggleTrendItemLike, user, setIsLoginModalOpen } = useApp();
+  const isLiked = user ? (post.likedBy || []).includes(user.id) : false;
   const videoUrl = post.videoUrl;
   const thumbnail = post.thumbnail;
   const isVideo = videoUrl?.match(/\.(mp4|webm|ogg|mov)$/i);
@@ -128,12 +143,11 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post }) => {
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const newLiked = !isLiked;
-    setIsLiked(newLiked);
-    updateTrendItem({
-      ...post as any,
-      likes: (post.likes || 0) + (newLiked ? 1 : -1)
-    });
+    if (!user) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+    toggleTrendItemLike(post.id);
   };
 
   const handleShare = (e: React.MouseEvent) => {
@@ -163,6 +177,9 @@ export const ReelItem: React.FC<ReelItemProps> = ({ post }) => {
           alt=""
           className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            e.currentTarget.src = 'https://picsum.photos/seed/error/400/600';
+          }}
         />
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />

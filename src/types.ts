@@ -15,7 +15,7 @@ export interface SiteConfig {
   fontFamily: string;
   logoUrl: string;
   productCategories?: string[];
-  communityTabs?: { id: string; name: string }[];
+  communityTabs?: string[];
   footerDescription?: string;
 }
 
@@ -36,19 +36,36 @@ export interface Product {
   reviewCount?: number;
   premiumLabel?: string;
   order?: number;
+  authorId?: string;
+}
+
+export interface Comment {
+  id: string;
+  author: string;
+  authorId: string;
+  authorAvatar?: string;
+  content: string;
+  createdAt: string;
+  replies?: Comment[];
 }
 
 export interface Post {
   id: string;
   author: string;
+  authorId?: string;
+  authorAvatar?: string;
+  authorBio?: string;
   title?: string;
   content: string;
   imageUrl?: string;
   videoUrl?: string; // For Reels
   likes: number;
+  likedBy?: string[];
+  comments?: Comment[];
   type: 'photo' | 'reel' | 'notice' | 'community';
   category?: string; // For Community tabs like '코스프레', '카테고리'
   createdAt: string;
+  date?: string;
   isPinned?: boolean;
   order?: number;
 }
@@ -60,6 +77,7 @@ export interface CommunityCategory {
   members: number;
   posts: number;
   imageUrl: string;
+  order?: number;
 }
 
 export interface Ranking {
@@ -68,6 +86,9 @@ export interface Ranking {
   posts: number;
   likes: number;
   avatar?: string;
+  bio?: string;
+  order?: number;
+  score?: number;
 }
 
 export interface TrendItem {
@@ -75,9 +96,14 @@ export interface TrendItem {
   videoUrl: string;
   title: string;
   thumbnail: string;
-  author?: string;
   content?: string;
+  author?: string;
+  authorId?: string;
+  authorAvatar?: string;
+  authorBio?: string;
   likes?: number;
+  likedBy?: string[];
+  order?: number;
 }
 
 export interface CartItem {
@@ -94,4 +120,34 @@ export interface Order {
   customerName: string;
   status: 'pending' | 'completed' | 'shipped';
   date: string;
+  userEmail?: string;
+  customerId?: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  avatar: string;
+  isAdmin: boolean;
+  roleLabel?: string; // e.g., "Premium Member"
+  bio?: string; // Shop introduction
+  wishlist?: string[];
+  cart?: CartItem[];
+  loginMethod?: 'email' | 'google';
+  lastLogin?: string;
+  createdAt?: string;
+}
+
+export interface SaleApplication {
+  id: string;
+  productName: string;
+  category: string;
+  description: string;
+  price: number;
+  imageUrl: string;
+  authorId: string;
+  authorEmail: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: any;
 }

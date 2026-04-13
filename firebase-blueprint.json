@@ -44,7 +44,8 @@
         "detailImages": { "type": "array", "items": { "type": "string" } },
         "premiumFeatures": { "type": "array", "items": { "type": "string" } },
         "rating": { "type": "number" },
-        "reviewCount": { "type": "number" }
+        "reviewCount": { "type": "number" },
+        "authorId": { "type": "string" }
       }
     },
     "Post": {
@@ -56,6 +57,7 @@
         "title": { "type": "string" },
         "content": { "type": "string" },
         "author": { "type": "string" },
+        "authorId": { "type": "string" },
         "date": { "type": "string" },
         "category": { "type": "string" },
         "imageUrl": { "type": "string" },
@@ -63,9 +65,60 @@
         "isPinned": { "type": "boolean" },
         "order": { "type": "number" }
       }
+    },
+    "TrendItem": {
+      "title": "Trend Item",
+      "description": "A trending reel or video",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "author": { "type": "string" },
+        "authorId": { "type": "string" },
+        "likes": { "type": "number" }
+      }
+    },
+    "User": {
+      "title": "User Profile",
+      "description": "Information about a registered user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "avatar": { "type": "string" },
+        "isAdmin": { "type": "boolean" },
+        "roleLabel": { "type": "string" },
+        "bio": { "type": "string" },
+        "wishlist": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "SaleApplication": {
+      "title": "Sale Application",
+      "description": "An application to sell a product",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productName": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorEmail": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productName", "category", "description", "price", "imageUrl", "authorId"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profiles"
+    },
     "/site/config": {
       "schema": "SiteConfig",
       "description": "The global site configuration"
@@ -97,6 +150,10 @@
     "/reviews/{reviewId}": {
       "schema": "Review",
       "description": "Product reviews"
+    },
+    "/saleApplications/{applicationId}": {
+      "schema": "SaleApplication",
+      "description": "Collection of sale applications"
     }
   }
 }

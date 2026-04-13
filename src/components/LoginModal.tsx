@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Mail, Lock, User, ArrowRight } from 'lucide-react';
 import { useApp } from '../store';
 import { auth } from '../firebase';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -14,6 +14,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const { login } = useApp();
   const [isRegister, setIsRegister] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -22,43 +23,42 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      
-      const userData = {
-        id: user.uid,
-        email: user.email,
-        name: user.displayName || user.email?.split('@')[0],
-        avatar: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`,
-      };
-      
-      login(userData);
+      // store.tsx's onAuthStateChanged will handle the rest
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Google login failed:', error);
+      setError(error.message || 'Google 로그인에 실패했습니다.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
     
-    // For now, we use mock login but it will be persisted in localStorage via store.login
-    setTimeout(() => {
-      const userData = {
-        id: Math.random().toString(36).substr(2, 9),
-        email: formData.email,
-        name: isRegister ? formData.name : formData.email.split('@')[0],
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${formData.email}`,
-      };
-      login(userData);
-      setIsLoading(false);
+    try {
+      if (isRegister) {
+        const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+        if (formData.name) {
+          await updateProfile(userCredential.user, { displayName: formData.name });
+        }
+      } else {
+        await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      }
+      // store.tsx's onAuthStateChanged will handle the rest
       onClose();
-    }, 1000);
+    } catch (error: any) {
+      console.error('Auth failed:', error);
+      setError(error.message || '인증에 실패했습니다. 정보를 다시 확인해주세요.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -96,6 +96,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                     : '크리에이티브 여정을 계속하려면 로그인하세요.'}
                 </p>
               </div>
+
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-bold">
+                  {error}
+                </div>
+              )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {isRegister && (

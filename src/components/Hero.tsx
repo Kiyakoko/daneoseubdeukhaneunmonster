@@ -36,13 +36,13 @@ export const Hero: React.FC = () => {
   const safeImageUrl = getSafeImageUrl(currentBanner.imageUrl);
 
   return (
-    <section className="w-full bg-white py-6 md:py-10">
+    <section className="w-full bg-white py-8 md:py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="relative w-full aspect-[720/1000] md:aspect-[19/6] bg-black overflow-hidden rounded-2xl md:rounded-[2rem] group shadow-2xl">
+        <div className="relative w-full aspect-[720/900] md:aspect-[16/8] bg-black overflow-hidden rounded-2xl md:rounded-[2.5rem] group shadow-2xl">
           {/* Preload images */}
           <div className="hidden">
             {banners.map((b, i) => (
-              <img key={i} src={getSafeImageUrl(b.imageUrl)} alt="" />
+              <img key={i} src={getSafeImageUrl(b.imageUrl)} alt="" loading="eager" fetchPriority={i === 0 ? "high" : "auto"} />
             ))}
           </div>
 
@@ -61,6 +61,11 @@ export const Hero: React.FC = () => {
                 alt={currentBanner.title}
                 className="absolute inset-0 w-full h-full object-cover z-10"
                 referrerPolicy="no-referrer"
+                loading="eager"
+                fetchPriority="high"
+                onError={(e) => {
+                  e.currentTarget.src = 'https://picsum.photos/seed/error/1920/1080';
+                }}
               />
               
               <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent z-20" />

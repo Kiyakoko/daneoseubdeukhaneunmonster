@@ -21,18 +21,56 @@ const MOCK_REVIEWS = [
 export const Shop: React.FC = () => {
   const navigate = useNavigate();
   const { products, config, reviews, addToCart } = useApp();
-  const categories = ['전체', '피규어', '문구/팬시', '인형', '코스프레', '기타'];
+  const categories = ['전체', '의상', '가발', '소품', '신발', '피규어', '문구/팬시', '인형', '코스프레', '기타'];
   const [activeCategory, setActiveCategory] = useState('전체');
+  const [searchTerm, setSearchTerm] = useState('');
   const [visibleRows, setVisibleRows] = useState(4);
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const [categoryIndex, setCategoryIndex] = useState(0);
   const itemsPerRow = 4;
 
+  const reviewList = reviews && reviews.length > 0 ? reviews : MOCK_REVIEWS;
+
+  const handleNextReview = () => {
+    if (reviewIndex < reviewList.length - 1) {
+      setReviewIndex(prev => prev + 1);
+    }
+  };
+
+  const handlePrevReview = () => {
+    if (reviewIndex > 0) {
+      setReviewIndex(prev => prev - 1);
+    }
+  };
+
+  const handleNextCategory = () => {
+    if (categoryIndex < categories.length - 3) {
+      setCategoryIndex(prev => prev + 1);
+    }
+  };
+
+  const handlePrevCategory = () => {
+    if (categoryIndex > 0) {
+      setCategoryIndex(prev => prev - 1);
+    }
+  };
+
   const filteredProducts = useMemo(() => {
-    const filtered = activeCategory === '전체' 
+    let filtered = activeCategory === '전체' 
       ? products 
       : products.filter(p => p.category === activeCategory);
     
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.name.toLowerCase().includes(term) || 
+        p.description.toLowerCase().includes(term) ||
+        p.category.toLowerCase().includes(term)
+      );
+    }
+    
     return filtered;
-  }, [products, activeCategory]);
+  }, [products, activeCategory, searchTerm]);
 
   const displayedProducts = filteredProducts.slice(0, visibleRows * itemsPerRow);
 
@@ -52,31 +90,55 @@ export const Shop: React.FC = () => {
         </header>
 
         {/* Filters & Search */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-12 space-y-6 md:space-y-0">
-          <div className="flex space-x-2 overflow-x-auto pb-2 md:pb-0 w-full md:w-auto scrollbar-hide">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => {
-                  setActiveCategory(cat);
-                  setVisibleRows(4);
-                }}
-                className={`px-6 py-2 rounded-full text-sm font-bold transition-all border-2 whitespace-nowrap ${
-                  activeCategory === cat 
-                    ? 'bg-black text-white border-black' 
-                    : 'bg-transparent text-black border-black hover:bg-black hover:text-white'
-                }`}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-12 items-center">
+          <div className="relative flex items-center w-full lg:col-span-3 group">
+            <button 
+              onClick={handlePrevCategory}
+              disabled={categoryIndex === 0}
+              className="absolute left-0 z-10 p-2 bg-white/90 backdrop-blur-sm border-2 border-black rounded-full shadow-lg disabled:opacity-0 transition-all hover:bg-black hover:text-white"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <div className="overflow-hidden w-full px-12">
+              <motion.div 
+                animate={{ x: `-${categoryIndex * 120}px` }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                className="flex gap-3 flex-nowrap"
               >
-                {cat}
-              </button>
-            ))}
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => {
+                      setActiveCategory(cat);
+                      setVisibleRows(4);
+                    }}
+                    className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all border-2 whitespace-nowrap ${
+                      activeCategory === cat 
+                        ? 'bg-black text-white border-black shadow-lg scale-105' 
+                        : 'bg-transparent text-black border-black hover:bg-black hover:text-white'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </motion.div>
+            </div>
+            <button 
+              onClick={handleNextCategory}
+              disabled={categoryIndex >= categories.length - 4}
+              className="absolute right-0 z-10 p-2 bg-white/90 backdrop-blur-sm border-2 border-black rounded-full shadow-lg disabled:opacity-0 transition-all hover:bg-black hover:text-white"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
-          <div className="relative w-full md:w-72">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <div className="relative w-full lg:col-span-1">
+            <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-black" />
             <input 
               type="text" 
               placeholder="상품 검색..." 
-              className="w-full pl-12 pr-6 py-3 rounded-full bg-gray-50 border-none focus:ring-2 focus:ring-accent outline-none font-medium"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-14 pr-6 py-4 rounded-full bg-white border-4 border-black focus:border-accent focus:ring-4 focus:ring-accent/20 outline-none font-bold transition-all shadow-xl placeholder:text-gray-400"
             />
           </div>
         </div>
@@ -117,23 +179,35 @@ export const Shop: React.FC = () => {
               <p className="text-gray-400 font-medium">실제 구매 고객님들의 생생한 후기를 만나보세요.</p>
             </div>
             <div className="flex space-x-2">
-              <button className="p-3 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors">
+              <button 
+                onClick={handlePrevReview}
+                disabled={reviewIndex === 0}
+                className="p-3 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
                 <ChevronLeft size={20} />
               </button>
-              <button className="p-3 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors">
+              <button 
+                onClick={handleNextReview}
+                disabled={reviewIndex >= reviewList.length - 1}
+                className="p-3 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
                 <ChevronRight size={20} />
               </button>
             </div>
           </div>
           
-          <div className="relative overflow-hidden">
-            <div className="flex space-x-6 overflow-x-auto pb-8 scrollbar-hide snap-x">
-              {(reviews && reviews.length > 0 ? reviews : MOCK_REVIEWS).map((review) => (
-                <div key={review.id} className="snap-start">
+          <div className="relative overflow-hidden scrollbar-hide">
+            <motion.div 
+              animate={{ x: `-${reviewIndex * 320}px` }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="flex space-x-6 pb-4"
+            >
+              {reviewList.map((review) => (
+                <div key={review.id} className="flex-shrink-0 w-[300px]">
                   <ReviewCard review={review} />
                 </div>
               ))}
-            </div>
+            </motion.div>
           </div>
 
           <div className="flex justify-center mt-8">

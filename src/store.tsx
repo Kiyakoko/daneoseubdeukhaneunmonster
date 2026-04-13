@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { SiteConfig, Product, Post, Order, CommunityCategory, Ranking, TrendItem, CartItem } from './types';
+import { SiteConfig, Product, Post, Order, CommunityCategory, Ranking, TrendItem, CartItem, User, Comment, SaleApplication } from './types';
 import { defaultConfig, defaultProducts, defaultPosts, defaultTrendItems, defaultReviews } from './constants';
 import { db, auth } from './firebase';
 import { 
@@ -10,12 +10,17 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc, 
+  writeBatch,
   getDocs, 
   getDoc,
   query,
+  where,
   orderBy,
   limit,
-  getDocFromServer
+  getDocFromServer,
+  increment,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 
@@ -79,9 +84,14 @@ interface AppState {
   rankings: Ranking[];
   trendItems: TrendItem[];
   reviews: any[];
+  users: User[];
+  saleApplications: SaleApplication[];
   cart: CartItem[];
   wishlist: string[];
-  user: any | null;
+  user: User | null;
+  isLoaded: boolean;
+  isLoginModalOpen: boolean;
+  setIsLoginModalOpen: (isOpen: boolean) => void;
   setConfig: (config: SiteConfig) => void;
   addProduct: (product: Product) => void;
   updateProduct: (product: Product) => void;
@@ -92,10 +102,13 @@ interface AppState {
   deletePost: (id: string) => void;
   setPosts: (posts: Post[]) => void;
   addOrder: (order: Order) => void;
-  updateOrder: (id: string, status: Order['status']) => void;
+  updateOrder: (o: Order) => void;
   setCommunityCategories: (categories: CommunityCategory[]) => void;
   setRankings: (rankings: Ranking[]) => void;
+  syncRankings: () => Promise<void>;
   setTrendItems: (items: TrendItem[]) => void;
+  addTrendItem: (item: TrendItem) => void;
+  deleteTrendItem: (id: string) => void;
   setReviews: (reviews: any[]) => void;
   updateTrendItem: (item: TrendItem) => void;
   addToCart: (productId: string) => void;
@@ -103,6 +116,17 @@ interface AppState {
   updateCartItem: (id: string, quantity: number, selected: boolean) => void;
   clearCart: () => void;
   toggleWishlist: (productId: string) => void;
+  updateUserProfile: (data: Partial<User>) => void;
+  updateUser: (userId: string, data: Partial<User>) => void;
+  deleteUser: (userId: string) => void;
+  updateSaleApplicationStatus: (id: string, status: 'approved' | 'rejected') => void;
+  deleteSaleApplication: (id: string) => void;
+  addComment: (postId: string, comment: Comment) => void;
+  updateComment: (postId: string, comment: Comment) => void;
+  deleteComment: (postId: string, commentId: string) => void;
+  addReply: (postId: string, commentId: string, reply: Comment) => void;
+  togglePostLike: (postId: string) => void;
+  toggleTrendItemLike: (itemId: string) => void;
   login: (userData: any) => void;
   logout: () => void;
 }
@@ -118,39 +142,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [rankings, setRankingsState] = useState<Ranking[]>([]);
   const [trendItems, setTrendItemsState] = useState<TrendItem[]>(defaultTrendItems);
   const [reviews, setReviewsState] = useState<any[]>(defaultReviews);
+  const [users, setUsersState] = useState<User[]>([]);
+  const [saleApplications, setSaleApplicationsState] = useState<SaleApplication[]>([]);
   const [cart, setCartState] = useState<CartItem[]>([]);
   const [wishlist, setWishlistState] = useState<string[]>([]);
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
-  // Auth listener
+  // Auth listener and User profile listener
   useEffect(() => {
+    let unsubUserDoc: (() => void) | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        const userData = {
-          id: firebaseUser.uid,
-          email: firebaseUser.email,
-          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0],
-          avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.email}`,
-        };
-        setUser(userData);
-        localStorage.setItem('animation_user', JSON.stringify(userData));
+        const loginMethod = firebaseUser.providerData.some(p => p.providerId === 'google.com') ? 'google' : 'email';
+        const lastLogin = new Date().toISOString();
+
+        // Listen to user document in Firestore for real-time profile updates
+        unsubUserDoc = onSnapshot(doc(db, 'users', firebaseUser.uid), (snapshot) => {
+          if (snapshot.exists()) {
+            const userData = snapshot.data() as User;
+            setUser({ ...userData, id: firebaseUser.uid });
+            if (userData.wishlist) {
+              setWishlistState(userData.wishlist);
+            }
+            
+            // Update lastLogin if it's been more than 5 minutes since the last recorded login
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+            if (!userData.lastLogin || userData.lastLogin < fiveMinutesAgo || userData.loginMethod !== loginMethod) {
+              updateDoc(doc(db, 'users', firebaseUser.uid), { lastLogin, loginMethod });
+            }
+          } else {
+            // Create user document if it doesn't exist
+            const isAdmin = firebaseUser.email === 'moonnight0613@gmail.com' || firebaseUser.email === 'lunelaluz79@gmail.com';
+            const initialUserData: User = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.email}`,
+              isAdmin: isAdmin,
+              roleLabel: 'Premium Member',
+              wishlist: [],
+              loginMethod,
+              lastLogin,
+              createdAt: lastLogin
+            };
+            setDoc(doc(db, 'users', firebaseUser.uid), initialUserData);
+            setUser(initialUserData);
+          }
+        });
       } else {
-        // If no firebase user, check if we have a saved mock user
-        const savedUser = localStorage.getItem('animation_user');
-        if (!savedUser) {
-          setUser(null);
-        }
+        if (unsubUserDoc) unsubUserDoc();
+        setUser(null);
       }
       setIsAuthReady(true);
     });
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (unsubUserDoc) unsubUserDoc();
+    };
   }, []);
 
   // Fetch initial data and setup listeners
   useEffect(() => {
     if (!isAuthReady) return;
+
+    // Admin-only listeners
+    let unsubUsers: (() => void) | null = null;
+    let unsubSaleApplications: (() => void) | null = null;
+    if (user?.isAdmin) {
+      unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+        setUsersState(items);
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'users'));
+
+      unsubSaleApplications = onSnapshot(query(collection(db, 'saleApplications'), orderBy('createdAt', 'desc')), (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as SaleApplication));
+        setSaleApplicationsState(items);
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'saleApplications'));
+    }
 
     // Test connection
     const testConnection = async () => {
@@ -165,119 +237,266 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     testConnection();
 
     // Listeners
+    let snapshotsReceived = {
+      config: false,
+      products: false,
+      posts: false,
+      categories: false,
+      rankings: false,
+      trendItems: false,
+      reviews: false
+    };
+
+    // Consolidate server data fetch to avoid redundant requests
+    let serverDataCache: any = null;
+    const getServerData = async () => {
+      if (serverDataCache) return serverDataCache;
+      try {
+        const res = await fetch('/api/data');
+        serverDataCache = await res.json();
+        return serverDataCache;
+      } catch (err) {
+        console.error("Failed to fetch initial data from server:", err);
+        return {};
+      }
+    };
+
+    const checkAllLoaded = () => {
+      if (Object.values(snapshotsReceived).every(v => v)) {
+        setIsLoaded(true);
+      }
+    };
+
     const unsubConfig = onSnapshot(doc(db, 'site', 'config'), (snapshot) => {
       if (snapshot.exists()) {
         setConfigState(snapshot.data() as SiteConfig);
+        snapshotsReceived.config = true;
+        checkAllLoaded();
       } else {
         // Migration or default
-        fetch('/api/data').then(res => res.json()).then(data => {
-          if (data.config) setConfig(data.config);
+        getServerData().then(data => {
+          if (data.config) {
+            setConfig(data.config);
+          }
+          snapshotsReceived.config = true;
+          checkAllLoaded();
+        }).catch(() => {
+          snapshotsReceived.config = true;
+          checkAllLoaded();
         });
       }
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'site/config'));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.GET, 'site/config');
+      snapshotsReceived.config = true;
+      checkAllLoaded();
+    });
 
     const unsubProducts = onSnapshot(query(collection(db, 'products'), orderBy('order', 'asc')), (snapshot) => {
-      const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Product));
-      if (items.length > 0) {
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Product));
         setProductsState(items);
+        snapshotsReceived.products = true;
+        checkAllLoaded();
       } else {
-        fetch('/api/data').then(res => res.json()).then(data => {
-          if (data.products) {
-            data.products.forEach((p: Product, index: number) => {
-              const productWithOrder = { ...p, order: p.order ?? index };
-              addProduct(productWithOrder);
-            });
+        // If Firestore is empty, try to fetch from server
+        getServerData().then(data => {
+          if (data.products && data.products.length > 0) {
+            // Populate Firestore from server data if Firestore is empty
+            setProducts(data.products);
+          } else {
+            setProductsState([]);
           }
+          snapshotsReceived.products = true;
+          checkAllLoaded();
+        }).catch(() => {
+          setProductsState([]);
+          snapshotsReceived.products = true;
+          checkAllLoaded();
         });
       }
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'products'));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.GET, 'products');
+      snapshotsReceived.products = true;
+      checkAllLoaded();
+    });
 
     const unsubPosts = onSnapshot(query(collection(db, 'posts'), orderBy('order', 'asc')), (snapshot) => {
-      const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Post));
-      if (items.length > 0) {
-        setPostsState(items);
-      } else {
-        fetch('/api/data').then(res => res.json()).then(data => {
-          if (data.posts) {
-            data.posts.forEach((p: Post, index: number) => {
-              const postWithOrder = { ...p, order: p.order ?? index };
-              addPost(postWithOrder);
-            });
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => {
+          const data = doc.data() as Post;
+          // Fix for posts with null likes
+          if (data.likes === null || data.likes === undefined) {
+            data.likes = data.likedBy?.length || 0;
           }
+          return { ...data, id: doc.id };
+        });
+        setPostsState(items);
+        snapshotsReceived.posts = true;
+        checkAllLoaded();
+      } else {
+        // If Firestore is empty, try to fetch from server
+        getServerData().then(data => {
+          if (data.posts && data.posts.length > 0) {
+            setPosts(data.posts);
+          } else {
+            setPostsState([]);
+          }
+          snapshotsReceived.posts = true;
+          checkAllLoaded();
+        }).catch(() => {
+          setPostsState([]);
+          snapshotsReceived.posts = true;
+          checkAllLoaded();
         });
       }
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'posts'));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.GET, 'posts');
+      snapshotsReceived.posts = true;
+      checkAllLoaded();
+    });
 
-    const unsubOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
-      const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Order));
-      setOrdersState(items);
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'orders'));
+    let unsubOrders: (() => void) | null = null;
+    if (user) {
+      const ordersQuery = user.isAdmin ? collection(db, 'orders') : query(collection(db, 'orders'), where('customerId', '==', user.id));
+      unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Order));
+        setOrdersState(items);
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'orders'));
+    }
 
-    const unsubCategories = onSnapshot(collection(db, 'communityCategories'), (snapshot) => {
-      const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CommunityCategory));
-      if (items.length > 0) {
+    const unsubCategories = onSnapshot(query(collection(db, 'communityCategories'), orderBy('order', 'asc')), (snapshot) => {
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CommunityCategory));
         setCommunityCategoriesState(items);
+        snapshotsReceived.categories = true;
+        checkAllLoaded();
       } else {
-        fetch('/api/data').then(res => res.json()).then(data => {
-          if (data.communityCategories) data.communityCategories.forEach((c: CommunityCategory) => {
-            setDoc(doc(db, 'communityCategories', c.id), c);
-          });
+        getServerData().then(data => {
+          if (data.communityCategories && data.communityCategories.length > 0) {
+            setCommunityCategories(data.communityCategories);
+          } else {
+            setCommunityCategoriesState([]);
+          }
+          snapshotsReceived.categories = true;
+          checkAllLoaded();
+        }).catch(() => {
+          setCommunityCategoriesState([]);
+          snapshotsReceived.categories = true;
+          checkAllLoaded();
         });
       }
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'communityCategories'));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.GET, 'communityCategories');
+      snapshotsReceived.categories = true;
+      checkAllLoaded();
+    });
 
-    const unsubRankings = onSnapshot(collection(db, 'rankings'), (snapshot) => {
-      const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Ranking));
-      if (items.length > 0) {
+    const unsubRankings = onSnapshot(query(collection(db, 'rankings'), orderBy('order', 'asc')), (snapshot) => {
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Ranking));
         setRankingsState(items);
+        snapshotsReceived.rankings = true;
+        checkAllLoaded();
       } else {
-        fetch('/api/data').then(res => res.json()).then(data => {
-          if (data.rankings) data.rankings.forEach((r: Ranking) => {
-            setDoc(doc(db, 'rankings', r.id), r);
-          });
+        getServerData().then(data => {
+          if (data.rankings && data.rankings.length > 0) {
+            setRankings(data.rankings);
+          } else {
+            setRankingsState([]);
+          }
+          snapshotsReceived.rankings = true;
+          checkAllLoaded();
+        }).catch(() => {
+          setRankingsState([]);
+          snapshotsReceived.rankings = true;
+          checkAllLoaded();
         });
       }
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'rankings'));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.GET, 'rankings');
+      snapshotsReceived.rankings = true;
+      checkAllLoaded();
+    });
 
-    const unsubTrendItems = onSnapshot(collection(db, 'trendItems'), (snapshot) => {
-      const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as TrendItem));
-      if (items.length > 0) {
+    const unsubTrendItems = onSnapshot(query(collection(db, 'trendItems'), orderBy('order', 'asc')), (snapshot) => {
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as TrendItem));
         setTrendItemsState(items);
+        snapshotsReceived.trendItems = true;
+        checkAllLoaded();
       } else {
-        fetch('/api/data').then(res => res.json()).then(data => {
-          if (data.trendItems) data.trendItems.forEach((t: TrendItem) => {
-            setDoc(doc(db, 'trendItems', t.id), t);
-          });
+        getServerData().then(data => {
+          if (data.trendItems && data.trendItems.length > 0) {
+            setTrendItems(data.trendItems);
+          } else {
+            setTrendItemsState([]);
+          }
+          snapshotsReceived.trendItems = true;
+          checkAllLoaded();
+        }).catch(() => {
+          setTrendItemsState([]);
+          snapshotsReceived.trendItems = true;
+          checkAllLoaded();
         });
       }
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'trendItems'));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.GET, 'trendItems');
+      snapshotsReceived.trendItems = true;
+      checkAllLoaded();
+    });
 
     const unsubReviews = onSnapshot(collection(db, 'reviews'), (snapshot) => {
-      const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as any));
-      if (items.length > 0) {
+      if (!snapshot.empty) {
+        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as any));
         setReviewsState(items);
+        snapshotsReceived.reviews = true;
+        checkAllLoaded();
       } else {
-        fetch('/api/data').then(res => res.json()).then(data => {
-          if (data.reviews) data.reviews.forEach((r: any) => {
-            setDoc(doc(db, 'reviews', r.id), r);
-          });
+        getServerData().then(data => {
+          if (data.reviews && data.reviews.length > 0) {
+            setReviews(data.reviews);
+          } else {
+            setReviewsState([]);
+          }
+          snapshotsReceived.reviews = true;
+          checkAllLoaded();
+        }).catch(() => {
+          setReviewsState([]);
+          snapshotsReceived.reviews = true;
+          checkAllLoaded();
         });
       }
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'reviews'));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.GET, 'reviews');
+      snapshotsReceived.reviews = true;
+      checkAllLoaded();
+    });
 
-    setIsLoaded(true);
+    // Timeout to force load if snapshots take too long
+    const forceLoadTimeout = setTimeout(() => {
+      if (!isLoaded) {
+        const pending = Object.entries(snapshotsReceived)
+          .filter(([_, v]) => !v)
+          .map(([k, _]) => k);
+        console.warn(`Snapshots taking too long, forcing load. Pending: ${pending.join(', ')}`);
+        setIsLoaded(true);
+      }
+    }, 10000);
 
     return () => {
+      clearTimeout(forceLoadTimeout);
       unsubConfig();
       unsubProducts();
       unsubPosts();
-      unsubOrders();
+      if (unsubOrders) unsubOrders();
       unsubCategories();
       unsubRankings();
       unsubTrendItems();
       unsubReviews();
+      if (unsubUsers) unsubUsers();
+      if (unsubSaleApplications) unsubSaleApplications();
     };
-  }, [isAuthReady]);
+  }, [isAuthReady, user?.isAdmin]);
 
   // Local storage for user session and cart
   useEffect(() => {
@@ -374,17 +593,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setProducts = async (newProducts: Product[]) => {
-    for (let i = 0; i < newProducts.length; i++) {
-      const p = newProducts[i];
-      const { id, ...data } = p;
-      await setDoc(doc(db, 'products', id), { ...data, order: i });
+    try {
+      const batch = writeBatch(db);
+      
+      // Delete existing products to ensure order is correct and no orphans
+      const existingSnapshot = await getDocs(collection(db, 'products'));
+      existingSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      // Add new products
+      newProducts.forEach((p, index) => {
+        const { id, ...data } = p;
+        const docRef = doc(collection(db, 'products'), id || Date.now().toString() + index);
+        batch.set(docRef, { ...data, order: index });
+      });
+      
+      await batch.commit();
+      
+      // Sync to server
+      await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newProducts.map((p, i) => ({ ...p, order: i })))
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'products');
     }
-    // Sync to server
-    await fetch('/api/products', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newProducts.map((p, i) => ({ ...p, order: i })))
-    });
   };
   
   const addPost = async (p: Post) => {
@@ -440,17 +675,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setPosts = async (newPosts: Post[]) => {
-    for (let i = 0; i < newPosts.length; i++) {
-      const p = newPosts[i];
-      const { id, ...data } = p;
-      await setDoc(doc(db, 'posts', id), { ...data, order: i });
+    try {
+      const batch = writeBatch(db);
+      
+      // Delete existing posts
+      const existingSnapshot = await getDocs(collection(db, 'posts'));
+      existingSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      // Add new posts
+      newPosts.forEach((p, index) => {
+        const { id, ...data } = p;
+        const docRef = doc(collection(db, 'posts'), id || Date.now().toString() + index);
+        batch.set(docRef, { ...data, order: index });
+      });
+      
+      await batch.commit();
+      
+      // Sync to server
+      await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPosts.map((p, i) => ({ ...p, order: i })))
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'posts');
     }
-    // Sync to server
-    await fetch('/api/posts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newPosts.map((p, i) => ({ ...p, order: i })))
-    });
   };
 
   const addOrder = async (o: Order) => {
@@ -513,51 +764,185 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setCommunityCategories = async (categories: CommunityCategory[]) => {
-    for (const c of categories) {
-      await setDoc(doc(db, 'communityCategories', c.id), c);
+    try {
+      const batch = writeBatch(db);
+      const snapshot = await getDocs(collection(db, 'communityCategories'));
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      categories.forEach((c, index) => {
+        const docRef = doc(collection(db, 'communityCategories'), c.id);
+        batch.set(docRef, { ...c, order: index });
+      });
+      
+      await batch.commit();
+      
+      // Sync to server
+      await fetch('/api/community-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(categories.map((c, i) => ({ ...c, order: i })))
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'communityCategories');
     }
-    // Sync to server
-    await fetch('/api/community-categories', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(categories)
-    });
   };
 
   const setRankings = async (rankings: Ranking[]) => {
-    for (const r of rankings) {
-      await setDoc(doc(db, 'rankings', r.id), r);
+    try {
+      const batch = writeBatch(db);
+      const snapshot = await getDocs(collection(db, 'rankings'));
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      rankings.forEach((r, index) => {
+        const docRef = doc(collection(db, 'rankings'), r.id);
+        batch.set(docRef, { ...r, order: index });
+      });
+      
+      await batch.commit();
+      
+      // Sync to server
+      await fetch('/api/rankings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rankings.map((r, i) => ({ ...r, order: i })))
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'rankings');
     }
-    // Sync to server
-    await fetch('/api/rankings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(rankings)
-    });
   };
 
-  const setTrendItems = async (items: TrendItem[]) => {
-    for (const t of items) {
-      await setDoc(doc(db, 'trendItems', t.id), t);
+  const syncRankings = async () => {
+    try {
+      const userStats: Record<string, { id: string; name: string; avatar: string; bio: string; posts: number; likes: number }> = {};
+      
+      posts.forEach(post => {
+        if (post.authorId) {
+          if (!userStats[post.authorId]) {
+            userStats[post.authorId] = { 
+              id: post.authorId, 
+              name: post.author, 
+              avatar: post.authorAvatar || '', 
+              bio: post.authorBio || '',
+              posts: 0, 
+              likes: 0 
+            };
+          }
+          userStats[post.authorId].posts += 1;
+          userStats[post.authorId].likes += (post.likes || 0);
+          // Always use the latest bio if available
+          if (post.authorBio) userStats[post.authorId].bio = post.authorBio;
+        }
+      });
+
+      const calculatedRankings = Object.values(userStats)
+        .sort((a, b) => b.likes - a.likes || b.posts - a.posts)
+        .slice(0, 10)
+        .map((r, i) => ({ ...r, score: r.likes * 10 + r.posts * 5, order: i }));
+
+      await setRankings(calculatedRankings);
+    } catch (error) {
+      console.error('Error syncing rankings:', error);
     }
-    // Sync to server
-    await fetch('/api/trend-items', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(items)
-    });
+  };
+
+  useEffect(() => {
+    if (posts.length > 0) {
+      const timer = setTimeout(() => {
+        syncRankings();
+      }, 1000); // Debounce to avoid excessive writes
+      return () => clearTimeout(timer);
+    }
+  }, [posts]);
+
+  const setTrendItems = async (items: TrendItem[]) => {
+    try {
+      const batch = writeBatch(db);
+      const snapshot = await getDocs(collection(db, 'trendItems'));
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      items.forEach((t, index) => {
+        const { id, ...data } = t;
+        const docRef = doc(collection(db, 'trendItems'), id);
+        batch.set(docRef, { ...data, order: index });
+      });
+      
+      await batch.commit();
+      
+      // Sync to server
+      await fetch('/api/trend-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(items.map((t, i) => ({ ...t, order: i })))
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'trendItems');
+    }
+  };
+
+  const addTrendItem = async (item: TrendItem) => {
+    try {
+      const { id, ...data } = item;
+      if (data.order === undefined) {
+        data.order = trendItems.length;
+      }
+      await setDoc(doc(db, 'trendItems', id), data);
+      
+      const updatedItems = [...trendItems.filter(i => i.id !== id), { ...data, id }];
+      await fetch('/api/trend-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedItems)
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `trendItems/${item.id}`);
+    }
+  };
+
+  const deleteTrendItem = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'trendItems', id));
+      
+      const updatedItems = trendItems.filter(i => i.id !== id);
+      await fetch('/api/trend-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedItems)
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `trendItems/${id}`);
+    }
   };
 
   const setReviews = async (reviews: any[]) => {
-    for (const r of reviews) {
-      await setDoc(doc(db, 'reviews', r.id), r);
+    try {
+      const batch = writeBatch(db);
+      const snapshot = await getDocs(collection(db, 'reviews'));
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      reviews.forEach((r) => {
+        const docRef = doc(collection(db, 'reviews'), r.id);
+        batch.set(docRef, r);
+      });
+      
+      await batch.commit();
+      
+      // Sync to server
+      await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reviews)
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'reviews');
     }
-    // Sync to server
-    await fetch('/api/reviews', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reviews)
-    });
   };
 
   const updateTrendItem = async (item: TrendItem) => {
@@ -580,7 +965,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCartState(prev => {
       const existing = prev.find(item => item.productId === productId);
       if (existing) {
-        return prev.map(item => item.productId === productId ? { ...item, quantity: item.quantity + 1 } : item);
+        // Limit to maximum 1
+        return prev;
       }
       return [...prev, { id: Math.random().toString(36).substr(2, 9), productId, quantity: 1, selected: true }];
     });
@@ -598,14 +984,319 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCartState([]);
   };
 
-  const toggleWishlist = (productId: string) => {
-    setWishlistState(prev => {
-      if (prev.includes(productId)) {
-        return prev.filter(id => id !== productId);
+  const toggleWishlist = async (productId: string) => {
+    const newWishlist = wishlist.includes(productId)
+      ? wishlist.filter(id => id !== productId)
+      : [...wishlist, productId];
+    
+    setWishlistState(newWishlist);
+    
+    if (user) {
+      try {
+        await updateDoc(doc(db, 'users', user.id), { wishlist: newWishlist });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `users/${user.id}`);
       }
-      return [...prev, productId];
-    });
+    }
   };
+
+  const updateUserProfile = async (data: Partial<User>) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.id), data);
+      setUser({ ...user, ...data });
+      
+      // Sync to posts, comments, and trend items
+      if (data.name || data.avatar || data.bio) {
+        // Update ALL posts to find comments/replies by the user
+        for (const post of posts) {
+          let needsUpdate = false;
+          const updatedPost = { ...post };
+
+          // If user is the author of the post
+          if (post.authorId === user.id) {
+            if (data.name) updatedPost.author = data.name;
+            if (data.avatar) updatedPost.authorAvatar = data.avatar;
+            if (data.bio !== undefined) updatedPost.authorBio = data.bio;
+            needsUpdate = true;
+          }
+          
+          // Check comments and replies in EVERY post
+          if (updatedPost.comments) {
+            const originalCommentsJson = JSON.stringify(updatedPost.comments);
+            updatedPost.comments = updatedPost.comments.map(c => {
+              let commentUpdated = false;
+              const updatedComment = { ...c };
+
+              if (c.authorId === user.id) {
+                if (data.name) updatedComment.author = data.name;
+                if (data.avatar) updatedComment.authorAvatar = data.avatar;
+                commentUpdated = true;
+              }
+
+              if (updatedComment.replies) {
+                updatedComment.replies = updatedComment.replies.map(r => {
+                  if (r.authorId === user.id) {
+                    return { 
+                      ...r, 
+                      author: data.name || r.author, 
+                      authorAvatar: data.avatar || r.authorAvatar 
+                    };
+                  }
+                  return r;
+                });
+              }
+              
+              if (commentUpdated || JSON.stringify(updatedComment.replies) !== JSON.stringify(c.replies)) {
+                needsUpdate = true;
+                return updatedComment;
+              }
+              return c;
+            });
+
+            if (JSON.stringify(updatedPost.comments) !== originalCommentsJson) {
+              needsUpdate = true;
+            }
+          }
+
+          if (needsUpdate) {
+            await updatePost(updatedPost);
+          }
+        }
+
+        // Update trend items
+        const batchTrends = trendItems.filter(t => t.authorId === user.id);
+        for (const trend of batchTrends) {
+          const updatedTrend = { ...trend };
+          if (data.name) updatedTrend.author = data.name;
+          if (data.avatar) updatedTrend.authorAvatar = data.avatar;
+          if (data.bio !== undefined) updatedTrend.authorBio = data.bio;
+          await updateTrendItem(updatedTrend);
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${user.id}`);
+    }
+  };
+
+  const updateUser = async (userId: string, data: Partial<User>) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), data);
+      if (user?.id === userId) {
+        setUser({ ...user, ...data });
+      }
+
+      // Sync to posts, comments, and trend items
+      if (data.name || data.avatar) {
+        // Update ALL posts to find comments/replies by the user
+        for (const post of posts) {
+          let needsUpdate = false;
+          const updatedPost = { ...post };
+
+          // If user is the author of the post
+          if (post.authorId === userId) {
+            if (data.name) updatedPost.author = data.name;
+            if (data.avatar) updatedPost.authorAvatar = data.avatar;
+            needsUpdate = true;
+          }
+          
+          // Check comments and replies in EVERY post
+          if (updatedPost.comments) {
+            const originalCommentsJson = JSON.stringify(updatedPost.comments);
+            updatedPost.comments = updatedPost.comments.map(c => {
+              let commentUpdated = false;
+              const updatedComment = { ...c };
+
+              if (c.authorId === userId) {
+                if (data.name) updatedComment.author = data.name;
+                if (data.avatar) updatedComment.authorAvatar = data.avatar;
+                commentUpdated = true;
+              }
+
+              if (updatedComment.replies) {
+                updatedComment.replies = updatedComment.replies.map(r => {
+                  if (r.authorId === userId) {
+                    return { 
+                      ...r, 
+                      author: data.name || r.author, 
+                      authorAvatar: data.avatar || r.authorAvatar 
+                    };
+                  }
+                  return r;
+                });
+              }
+              
+              if (commentUpdated || JSON.stringify(updatedComment.replies) !== JSON.stringify(c.replies)) {
+                needsUpdate = true;
+                return updatedComment;
+              }
+              return c;
+            });
+
+            if (JSON.stringify(updatedPost.comments) !== originalCommentsJson) {
+              needsUpdate = true;
+            }
+          }
+
+          if (needsUpdate) {
+            await updatePost(updatedPost);
+          }
+        }
+
+        // Update trend items
+        const batchTrends = trendItems.filter(t => t.authorId === userId);
+        for (const trend of batchTrends) {
+          const updatedTrend = { ...trend };
+          if (data.name) updatedTrend.author = data.name;
+          if (data.avatar) updatedTrend.authorAvatar = data.avatar;
+          await updateTrendItem(updatedTrend);
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${userId}`);
+    }
+  };
+
+  const updateSaleApplicationStatus = async (id: string, status: 'approved' | 'rejected') => {
+    try {
+      await updateDoc(doc(db, 'saleApplications', id), { status });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `saleApplications/${id}`);
+    }
+  };
+
+  const deleteSaleApplication = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'saleApplications', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `saleApplications/${id}`);
+    }
+  };
+
+  const addComment = async (postId: string, comment: Comment) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    const updatedComments = [...(post.comments || []), comment];
+    await updatePost({ ...post, comments: updatedComments });
+  };
+
+  const updateComment = async (postId: string, comment: Comment) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    const updatedComments = (post.comments || []).map(c => c.id === comment.id ? comment : c);
+    await updatePost({ ...post, comments: updatedComments });
+  };
+
+  const deleteComment = async (postId: string, commentId: string) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    const updatedComments = (post.comments || []).filter(c => c.id !== commentId);
+    await updatePost({ ...post, comments: updatedComments });
+  };
+
+  const addReply = async (postId: string, commentId: string, reply: Comment) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    const updatedComments = (post.comments || []).map(c => {
+      if (c.id === commentId) {
+        return { ...c, replies: [...(c.replies || []), reply] };
+      }
+      return c;
+    });
+    await updatePost({ ...post, comments: updatedComments });
+  };
+
+  const togglePostLike = async (postId: string) => {
+    if (!user) return;
+    try {
+      const postIndex = posts.findIndex(p => p.id === postId);
+      if (postIndex === -1) return;
+      
+      const post = posts[postIndex];
+      const likedBy = post.likedBy || [];
+      const isLiked = likedBy.includes(user.id);
+      
+      // Optimistic update
+      const newLikedBy = isLiked 
+        ? likedBy.filter(id => id !== user.id)
+        : [...likedBy, user.id];
+      const currentLikes = typeof post.likes === 'number' ? post.likes : (post.likedBy?.length || 0);
+      const newLikes = currentLikes + (isLiked ? -1 : 1);
+      
+      const newPosts = [...posts];
+      newPosts[postIndex] = { ...post, likes: newLikes, likedBy: newLikedBy };
+      setPostsState(newPosts);
+
+      const postRef = doc(db, 'posts', postId);
+      await updateDoc(postRef, {
+        likes: increment(isLiked ? -1 : 1),
+        likedBy: isLiked ? arrayRemove(user.id) : arrayUnion(user.id)
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}`);
+    }
+  };
+
+  const toggleTrendItemLike = async (itemId: string) => {
+    if (!user) return;
+    try {
+      const itemIndex = trendItems.findIndex(i => i.id === itemId);
+      if (itemIndex === -1) return;
+
+      const item = trendItems[itemIndex];
+      const likedBy = item.likedBy || [];
+      const isLiked = likedBy.includes(user.id);
+      
+      // Optimistic update
+      const newLikedBy = isLiked 
+        ? likedBy.filter(id => id !== user.id)
+        : [...likedBy, user.id];
+      const currentLikes = typeof item.likes === 'number' ? item.likes : (item.likedBy?.length || 0);
+      const newLikes = currentLikes + (isLiked ? -1 : 1);
+      
+      const newTrendItems = [...trendItems];
+      newTrendItems[itemIndex] = { ...item, likes: newLikes, likedBy: newLikedBy };
+      setTrendItemsState(newTrendItems);
+
+      const itemRef = doc(db, 'trendItems', itemId);
+      await updateDoc(itemRef, {
+        likes: increment(isLiked ? -1 : 1),
+        likedBy: isLiked ? arrayRemove(user.id) : arrayUnion(user.id)
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `trendItems/${itemId}`);
+    }
+  };
+
+  // Cleanup/Fix effect for specific posts
+  useEffect(() => {
+    if (isLoaded && posts.length > 0) {
+      const fixSpecificPosts = async () => {
+        const postsToFix = posts.filter(p => p.likes === null || p.likes === undefined);
+        if (postsToFix.length === 0) return;
+
+        for (const post of postsToFix) {
+          try {
+            await updateDoc(doc(db, 'posts', post.id), { 
+              likes: post.likedBy?.length || 0,
+              likedBy: post.likedBy || []
+            });
+          } catch (e) {
+            console.error("Failed to fix post likes:", post.id, e);
+          }
+        }
+      };
+      fixSpecificPosts();
+    }
+  }, [isLoaded, posts.length]);
 
   const login = (userData: any) => {
     setUser(userData);
@@ -627,11 +1318,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{ 
-      config, products, posts, orders, communityCategories, rankings, trendItems, reviews, cart, wishlist, user,
+      config, products, posts, orders, communityCategories, rankings, syncRankings, trendItems, reviews, users, saleApplications, cart, wishlist, user, isLoaded,
+      isLoginModalOpen, setIsLoginModalOpen,
       setConfig, addProduct, updateProduct, deleteProduct, setProducts,
       addPost, updatePost, deletePost, setPosts, addOrder, updateOrder,
-      setCommunityCategories, setRankings, setTrendItems, setReviews, updateTrendItem,
+      setCommunityCategories, setRankings, setTrendItems, addTrendItem, deleteTrendItem, setReviews, updateTrendItem,
       addToCart, removeFromCart, updateCartItem, clearCart, toggleWishlist,
+      updateUserProfile, updateUser, deleteUser, 
+      updateSaleApplicationStatus, deleteSaleApplication,
+      addComment, updateComment, deleteComment, addReply,
+      togglePostLike, toggleTrendItemLike,
       login, logout
     }}>
       {children}
